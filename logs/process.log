@@ -1,0 +1,175 @@
+2026-04-03 12:08:59,399 [INFO] ============================================================
+2026-04-03 12:08:59,400 [INFO] INICIO DEL PROCESO ARCHIVISTICO
+2026-04-03 12:08:59,401 [INFO]   Excel:     C:\Users\ferna\Videos\fracmen_auto\inventario.xlsx
+2026-04-03 12:08:59,401 [INFO]   PDF:       C:\Users\ferna\Videos\fracmen_auto\documento.pdf
+2026-04-03 12:08:59,402 [INFO]   Filas:     2 → 6
+2026-04-03 12:08:59,403 [INFO]   Salida:    C:\Users\ferna\Videos\fracmen_auto\output
+2026-04-03 12:08:59,403 [INFO]   DRY RUN:   False
+2026-04-03 12:08:59,404 [INFO]   Saltos:    OFF
+2026-04-03 12:08:59,404 [INFO] ============================================================
+2026-04-03 12:08:59,404 [INFO] Cargando Excel: C:\Users\ferna\Videos\fracmen_auto\inventario.xlsx
+2026-04-03 12:08:59,835 [INFO] Excel cargado: 22 registros encontrados (columnas: ['N° DE REGISTRO', 'ESCRIBANO/NOTARIO', 'N° DE PROT.', 'N° DE FOLIOS', 'DATA TOPICA(Lugar)', 'FECHA INICIAL', 'TITULO/ESCRITURA', 'INTERESADO 1', 'INTERESADO 2', 'INTERESADO 3', 'ALCANCE Y CONTENIDO', 'OBSERVACIONES', 'RESPONSABLE DE LA DESCRIPCION', 'FECHA DE DESCRIPCION'])
+2026-04-03 12:08:59,836 [INFO] Filas seleccionadas: 5 (de 2 a 6 del Excel)
+2026-04-03 12:08:59,836 [INFO] Abriendo PDF fuente: C:\Users\ferna\Videos\fracmen_auto\documento.pdf (29 KB)
+2026-04-03 12:08:59,859 [INFO] PDF fuente tiene 40 páginas
+2026-04-03 12:08:59,917 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Obligacion\5- Mayo\Diego de Aramburu\Antonio de Oviedo.pdf (2 páginas)
+2026-04-03 12:08:59,917 [INFO] Fila 2 / Reg 1: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Obligacion\5- Mayo\Diego de Aramburu\Antonio de Oviedo.pdf (2 pag.: [1, 2])
+2026-04-03 12:08:59,924 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Carta de deuda\5- Mayo\Juan de Mendoza\Isabel de Castilla.pdf (2 páginas)
+2026-04-03 12:08:59,926 [INFO] Fila 3 / Reg 2: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Carta de deuda\5- Mayo\Juan de Mendoza\Isabel de Castilla.pdf (2 pag.: [3, 4])
+2026-04-03 12:08:59,933 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Pago\5- Mayo\Francisco de Toledo\Catalina de Aragón.pdf (2 páginas)
+2026-04-03 12:08:59,933 [INFO] Fila 4 / Reg 3: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Pago\5- Mayo\Francisco de Toledo\Catalina de Aragón.pdf (2 pag.: [5, 6])
+2026-04-03 12:08:59,947 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Servicio\5- Mayo\Alonso Pérez\Beatriz Enríquez.pdf (6 páginas)
+2026-04-03 12:08:59,948 [INFO] Fila 5 / Reg 4: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Servicio\5- Mayo\Alonso Pérez\Beatriz Enríquez.pdf (6 pag.: [7, 8, 9, 10, 11, 12])
+2026-04-03 12:08:59,955 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Escritura Perdon\5- Mayo\Hernando de Soto\Juana de Austria.pdf (1 páginas)
+2026-04-03 12:08:59,955 [INFO] Fila 6 / Reg 5: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Escritura Perdon\5- Mayo\Hernando de Soto\Juana de Austria.pdf (1 pag.: [13])
+2026-04-03 12:08:59,958 [INFO] ============================================================
+2026-04-03 12:08:59,959 [INFO] RESUMEN DEL PROCESO
+2026-04-03 12:08:59,959 [INFO]   Filas seleccionadas: 5
+2026-04-03 12:08:59,960 [INFO]   Procesados:          5
+2026-04-03 12:08:59,960 [INFO]   Pendientes:          0
+2026-04-03 12:08:59,960 [INFO]   Tiempo:              0.56 segundos
+2026-04-03 12:08:59,961 [INFO]   Pendientes CSV:      C:\Users\ferna\Videos\fracmen_auto\logs\pendientes.csv
+2026-04-03 12:08:59,961 [INFO]   Log completo:        C:\Users\ferna\Videos\fracmen_auto\logs\process.log
+2026-04-03 12:08:59,962 [INFO] ============================================================
+2026-04-03 12:12:22,578 [INFO] ============================================================
+2026-04-03 12:12:22,579 [INFO] INICIO DEL PROCESO ARCHIVISTICO
+2026-04-03 12:12:22,580 [INFO]   Excel:     mi_inventario.xlsx
+2026-04-03 12:12:22,580 [INFO]   PDF:       protocolo1.pdf
+2026-04-03 12:12:22,580 [INFO]   Filas:     1 → 120
+2026-04-03 12:12:22,581 [INFO]   Salida:    C:\Users\ferna\Videos\fracmen_auto\output
+2026-04-03 12:12:22,581 [INFO]   DRY RUN:   False
+2026-04-03 12:12:22,581 [INFO]   Saltos:    ON
+2026-04-03 12:12:22,581 [INFO] ============================================================
+2026-04-03 12:12:22,582 [CRITICAL] Archivo no encontrado: Archivo Excel no encontrado: mi_inventario.xlsx
+2026-04-03 12:12:54,474 [INFO] ============================================================
+2026-04-03 12:12:54,474 [INFO] INICIO DEL PROCESO ARCHIVISTICO
+2026-04-03 12:12:54,475 [INFO]   Excel:     inventario.xlsx
+2026-04-03 12:12:54,475 [INFO]   PDF:       protocolo1.pdf
+2026-04-03 12:12:54,476 [INFO]   Filas:     1 → 120
+2026-04-03 12:12:54,476 [INFO]   Salida:    C:\Users\ferna\Videos\fracmen_auto\output
+2026-04-03 12:12:54,477 [INFO]   DRY RUN:   False
+2026-04-03 12:12:54,477 [INFO]   Saltos:    ON
+2026-04-03 12:12:54,477 [INFO] ============================================================
+2026-04-03 12:12:54,478 [INFO] Cargando Excel: inventario.xlsx
+2026-04-03 12:12:54,955 [INFO] Excel cargado: 22 registros encontrados (columnas: ['N° DE REGISTRO', 'ESCRIBANO/NOTARIO', 'N° DE PROT.', 'N° DE FOLIOS', 'DATA TOPICA(Lugar)', 'FECHA INICIAL', 'TITULO/ESCRITURA', 'INTERESADO 1', 'INTERESADO 2', 'INTERESADO 3', 'ALCANCE Y CONTENIDO', 'OBSERVACIONES', 'RESPONSABLE DE LA DESCRIPCION', 'FECHA DE DESCRIPCION'])
+2026-04-03 12:12:54,957 [INFO] Filas seleccionadas: 22 (de 1 a 22 del Excel)
+2026-04-03 12:12:54,958 [CRITICAL] Archivo no encontrado: PDF no encontrado: protocolo1.pdf
+2026-04-03 12:13:37,424 [INFO] ============================================================
+2026-04-03 12:13:37,425 [INFO] INICIO DEL PROCESO ARCHIVISTICO
+2026-04-03 12:13:37,426 [INFO]   Excel:     mi_inventario.xlsx
+2026-04-03 12:13:37,426 [INFO]   PDF:       documento.pdf
+2026-04-03 12:13:37,426 [INFO]   Filas:     1 → 120
+2026-04-03 12:13:37,426 [INFO]   Salida:    C:\Users\ferna\Videos\fracmen_auto\output
+2026-04-03 12:13:37,427 [INFO]   DRY RUN:   False
+2026-04-03 12:13:37,427 [INFO]   Saltos:    ON
+2026-04-03 12:13:37,427 [INFO] ============================================================
+2026-04-03 12:13:37,428 [CRITICAL] Archivo no encontrado: Archivo Excel no encontrado: mi_inventario.xlsx
+2026-04-03 12:14:01,848 [INFO] ============================================================
+2026-04-03 12:14:01,848 [INFO] INICIO DEL PROCESO ARCHIVISTICO
+2026-04-03 12:14:01,849 [INFO]   Excel:     inventario.xlsx
+2026-04-03 12:14:01,849 [INFO]   PDF:       documento.pdf
+2026-04-03 12:14:01,849 [INFO]   Filas:     1 → 120
+2026-04-03 12:14:01,849 [INFO]   Salida:    C:\Users\ferna\Videos\fracmen_auto\output
+2026-04-03 12:14:01,850 [INFO]   DRY RUN:   False
+2026-04-03 12:14:01,850 [INFO]   Saltos:    ON
+2026-04-03 12:14:01,850 [INFO] ============================================================
+2026-04-03 12:14:01,851 [INFO] Cargando Excel: inventario.xlsx
+2026-04-03 12:14:02,288 [INFO] Excel cargado: 22 registros encontrados (columnas: ['N° DE REGISTRO', 'ESCRIBANO/NOTARIO', 'N° DE PROT.', 'N° DE FOLIOS', 'DATA TOPICA(Lugar)', 'FECHA INICIAL', 'TITULO/ESCRITURA', 'INTERESADO 1', 'INTERESADO 2', 'INTERESADO 3', 'ALCANCE Y CONTENIDO', 'OBSERVACIONES', 'RESPONSABLE DE LA DESCRIPCION', 'FECHA DE DESCRIPCION'])
+2026-04-03 12:14:02,289 [INFO] Filas seleccionadas: 22 (de 1 a 22 del Excel)
+2026-04-03 12:14:02,290 [INFO] Abriendo PDF fuente: documento.pdf (29 KB)
+2026-04-03 12:14:02,302 [INFO] PDF fuente tiene 40 páginas
+2026-04-03 12:14:02,336 [INFO] Fila 1 / Reg : OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,337 [DEBUG] Colisión resuelta → Antonio de Oviedo_2.pdf
+2026-04-03 12:14:02,346 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Obligacion\5- Mayo\Diego de Aramburu\Antonio de Oviedo_2.pdf (2 páginas)
+2026-04-03 12:14:02,347 [INFO] Fila 2 / Reg 1: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Obligacion\5- Mayo\Diego de Aramburu\Antonio de Oviedo_2.pdf (2 pag.: [1, 2])
+2026-04-03 12:14:02,349 [DEBUG] Colisión resuelta → Isabel de Castilla_2.pdf
+2026-04-03 12:14:02,354 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Carta de deuda\5- Mayo\Juan de Mendoza\Isabel de Castilla_2.pdf (2 páginas)
+2026-04-03 12:14:02,355 [INFO] Fila 3 / Reg 2: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Carta de deuda\5- Mayo\Juan de Mendoza\Isabel de Castilla_2.pdf (2 pag.: [3, 4])
+2026-04-03 12:14:02,356 [DEBUG] Colisión resuelta → Catalina de Aragón_2.pdf
+2026-04-03 12:14:02,362 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Pago\5- Mayo\Francisco de Toledo\Catalina de Aragón_2.pdf (2 páginas)
+2026-04-03 12:14:02,363 [INFO] Fila 4 / Reg 3: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Pago\5- Mayo\Francisco de Toledo\Catalina de Aragón_2.pdf (2 pag.: [5, 6])
+2026-04-03 12:14:02,365 [DEBUG] Colisión resuelta → Beatriz Enríquez_2.pdf
+2026-04-03 12:14:02,374 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Servicio\5- Mayo\Alonso Pérez\Beatriz Enríquez_2.pdf (6 páginas)
+2026-04-03 12:14:02,374 [INFO] Fila 5 / Reg 4: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Servicio\5- Mayo\Alonso Pérez\Beatriz Enríquez_2.pdf (6 pag.: [7, 8, 9, 10, 11, 12])
+2026-04-03 12:14:02,376 [DEBUG] Colisión resuelta → Juana de Austria_2.pdf
+2026-04-03 12:14:02,382 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Escritura Perdon\5- Mayo\Hernando de Soto\Juana de Austria_2.pdf (1 páginas)
+2026-04-03 12:14:02,383 [INFO] Fila 6 / Reg 5: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Escritura Perdon\5- Mayo\Hernando de Soto\Juana de Austria_2.pdf (1 pag.: [13])
+2026-04-03 12:14:02,393 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Recibo\5- Mayo\Diego Velázquez\Leonor de Guzmán.pdf (2 páginas)
+2026-04-03 12:14:02,394 [INFO] Fila 7 / Reg 6: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Recibo\5- Mayo\Diego Velázquez\Leonor de Guzmán.pdf (2 pag.: [14, 15])
+2026-04-03 12:14:02,405 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Poder\5- Mayo\Rodrigo de Cervantes\María de Zúñiga.pdf (8 páginas)
+2026-04-03 12:14:02,406 [INFO] Fila 8 / Reg 7: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Poder\5- Mayo\Rodrigo de Cervantes\María de Zúñiga.pdf (8 pag.: [16, 17, 18, 19, 20, 21, 22, 23])
+2026-04-03 12:14:02,416 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Renuncia de Oficio\5- Mayo\Martín de Alarcón\Inés.pdf (2 páginas)
+2026-04-03 12:14:02,416 [INFO] Fila 9 / Reg 8: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Renuncia de Oficio\5- Mayo\Martín de Alarcón\Inés.pdf (2 pag.: [24, 25])
+2026-04-03 12:14:02,418 [WARNING] Fila 10 / Reg 9: OMITIDO - Salto de secuencia detectado: se esperaba página 26 pero se encontró página 25 (folios '13r-15v'). Páginas faltantes: []
+2026-04-03 12:14:02,419 [WARNING] Fila 11 / Reg 10: OMITIDO - Salto de secuencia detectado: se esperaba página 26 pero se encontró página 31 (folios '16r-18r'). Páginas faltantes: [26, 27, 28, 29, 30]
+2026-04-03 12:14:02,420 [WARNING] Fila 12 / Reg 11: OMITIDO - Salto de secuencia detectado: se esperaba página 26 pero se encontró página 36 (folios '18v-19r'). Páginas faltantes: [26, 27, 28, 29, 30, 31, 32, 33, 34, 35]
+2026-04-03 12:14:02,422 [INFO] Fila 13 / Reg 12: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,423 [INFO] Fila 14 / Reg 13: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,424 [INFO] Fila 15 / Reg 14: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,425 [INFO] Fila 16 / Reg 15: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,426 [INFO] Fila 17 / Reg 16: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,427 [INFO] Fila 18 / Reg 17: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,428 [INFO] Fila 19 / Reg 18: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,430 [INFO] Fila 20 / Reg 19: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,431 [INFO] Fila 21 / Reg 20: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,432 [INFO] Fila 22 / Reg 21: OMITIDO - Folios vacíos o nulos
+2026-04-03 12:14:02,434 [INFO] ============================================================
+2026-04-03 12:14:02,435 [INFO] RESUMEN DEL PROCESO
+2026-04-03 12:14:02,435 [INFO]   Filas seleccionadas: 22
+2026-04-03 12:14:02,436 [INFO]   Procesados:          8
+2026-04-03 12:14:02,436 [INFO]   Pendientes:          14
+2026-04-03 12:14:02,437 [INFO]   Tiempo:              0.59 segundos
+2026-04-03 12:14:02,437 [INFO]   Pendientes CSV:      C:\Users\ferna\Videos\fracmen_auto\logs\pendientes.csv
+2026-04-03 12:14:02,438 [INFO]   Log completo:        C:\Users\ferna\Videos\fracmen_auto\logs\process.log
+2026-04-03 12:14:02,439 [INFO] ============================================================
+2026-04-03 12:15:09,966 [INFO] ============================================================
+2026-04-03 12:15:09,966 [INFO] INICIO DEL PROCESO ARCHIVISTICO
+2026-04-03 12:15:09,967 [INFO]   Excel:     inventario.xlsx
+2026-04-03 12:15:09,967 [INFO]   PDF:       documento.pdf
+2026-04-03 12:15:09,968 [INFO]   Filas:     1 → 12
+2026-04-03 12:15:09,968 [INFO]   Salida:    C:\Users\ferna\Videos\fracmen_auto\output
+2026-04-03 12:15:09,968 [INFO]   DRY RUN:   False
+2026-04-03 12:15:09,968 [INFO]   Saltos:    ON
+2026-04-03 12:15:09,969 [INFO] ============================================================
+2026-04-03 12:15:09,969 [INFO] Cargando Excel: inventario.xlsx
+2026-04-03 12:15:10,507 [INFO] Excel cargado: 22 registros encontrados (columnas: ['N° DE REGISTRO', 'ESCRIBANO/NOTARIO', 'N° DE PROT.', 'N° DE FOLIOS', 'DATA TOPICA(Lugar)', 'FECHA INICIAL', 'TITULO/ESCRITURA', 'INTERESADO 1', 'INTERESADO 2', 'INTERESADO 3', 'ALCANCE Y CONTENIDO', 'OBSERVACIONES', 'RESPONSABLE DE LA DESCRIPCION', 'FECHA DE DESCRIPCION'])
+2026-04-03 12:15:10,508 [INFO] Filas seleccionadas: 12 (de 1 a 12 del Excel)
+2026-04-03 12:15:10,509 [INFO] Abriendo PDF fuente: documento.pdf (29 KB)
+2026-04-03 12:15:10,533 [INFO] PDF fuente tiene 40 páginas
+2026-04-03 12:15:10,576 [INFO] Fila 1 / Reg : OMITIDO - Folios vacíos o nulos
+2026-04-03 12:15:10,578 [DEBUG] Colisión resuelta → Antonio de Oviedo_3.pdf
+2026-04-03 12:15:10,588 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Obligacion\5- Mayo\Diego de Aramburu\Antonio de Oviedo_3.pdf (2 páginas)
+2026-04-03 12:15:10,588 [INFO] Fila 2 / Reg 1: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Obligacion\5- Mayo\Diego de Aramburu\Antonio de Oviedo_3.pdf (2 pag.: [1, 2])
+2026-04-03 12:15:10,590 [DEBUG] Colisión resuelta → Isabel de Castilla_3.pdf
+2026-04-03 12:15:10,597 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Carta de deuda\5- Mayo\Juan de Mendoza\Isabel de Castilla_3.pdf (2 páginas)
+2026-04-03 12:15:10,598 [INFO] Fila 3 / Reg 2: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Carta de deuda\5- Mayo\Juan de Mendoza\Isabel de Castilla_3.pdf (2 pag.: [3, 4])
+2026-04-03 12:15:10,600 [DEBUG] Colisión resuelta → Catalina de Aragón_3.pdf
+2026-04-03 12:15:10,605 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Pago\5- Mayo\Francisco de Toledo\Catalina de Aragón_3.pdf (2 páginas)
+2026-04-03 12:15:10,606 [INFO] Fila 4 / Reg 3: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Pago\5- Mayo\Francisco de Toledo\Catalina de Aragón_3.pdf (2 pag.: [5, 6])
+2026-04-03 12:15:10,608 [DEBUG] Colisión resuelta → Beatriz Enríquez_3.pdf
+2026-04-03 12:15:10,621 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Servicio\5- Mayo\Alonso Pérez\Beatriz Enríquez_3.pdf (6 páginas)
+2026-04-03 12:15:10,622 [INFO] Fila 5 / Reg 4: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Servicio\5- Mayo\Alonso Pérez\Beatriz Enríquez_3.pdf (6 pag.: [7, 8, 9, 10, 11, 12])
+2026-04-03 12:15:10,625 [DEBUG] Colisión resuelta → Juana de Austria_3.pdf
+2026-04-03 12:15:10,632 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Escritura Perdon\5- Mayo\Hernando de Soto\Juana de Austria_3.pdf (1 páginas)
+2026-04-03 12:15:10,633 [INFO] Fila 6 / Reg 5: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Escritura Perdon\5- Mayo\Hernando de Soto\Juana de Austria_3.pdf (1 pag.: [13])
+2026-04-03 12:15:10,635 [DEBUG] Colisión resuelta → Leonor de Guzmán_2.pdf
+2026-04-03 12:15:10,639 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Recibo\5- Mayo\Diego Velázquez\Leonor de Guzmán_2.pdf (2 páginas)
+2026-04-03 12:15:10,640 [INFO] Fila 7 / Reg 6: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Recibo\5- Mayo\Diego Velázquez\Leonor de Guzmán_2.pdf (2 pag.: [14, 15])
+2026-04-03 12:15:10,642 [DEBUG] Colisión resuelta → María de Zúñiga_2.pdf
+2026-04-03 12:15:10,658 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Poder\5- Mayo\Rodrigo de Cervantes\María de Zúñiga_2.pdf (8 páginas)
+2026-04-03 12:15:10,660 [INFO] Fila 8 / Reg 7: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Poder\5- Mayo\Rodrigo de Cervantes\María de Zúñiga_2.pdf (8 pag.: [16, 17, 18, 19, 20, 21, 22, 23])
+2026-04-03 12:15:10,662 [DEBUG] Colisión resuelta → Inés_2.pdf
+2026-04-03 12:15:10,667 [DEBUG] PDF escrito: C:\Users\ferna\Videos\fracmen_auto\output\PORTUGAL, Cesar\1567\Protocolo N° 1\Renuncia de Oficio\5- Mayo\Martín de Alarcón\Inés_2.pdf (2 páginas)
+2026-04-03 12:15:10,668 [INFO] Fila 9 / Reg 8: OK - output\PORTUGAL, Cesar\1567\Protocolo N° 1\Renuncia de Oficio\5- Mayo\Martín de Alarcón\Inés_2.pdf (2 pag.: [24, 25])
+2026-04-03 12:15:10,669 [WARNING] Fila 10 / Reg 9: OMITIDO - Salto de secuencia detectado: se esperaba página 26 pero se encontró página 25 (folios '13r-15v'). Páginas faltantes: []
+2026-04-03 12:15:10,670 [WARNING] Fila 11 / Reg 10: OMITIDO - Salto de secuencia detectado: se esperaba página 26 pero se encontró página 31 (folios '16r-18r'). Páginas faltantes: [26, 27, 28, 29, 30]
+2026-04-03 12:15:10,671 [WARNING] Fila 12 / Reg 11: OMITIDO - Salto de secuencia detectado: se esperaba página 26 pero se encontró página 36 (folios '18v-19r'). Páginas faltantes: [26, 27, 28, 29, 30, 31, 32, 33, 34, 35]
+2026-04-03 12:15:10,673 [INFO] ============================================================
+2026-04-03 12:15:10,674 [INFO] RESUMEN DEL PROCESO
+2026-04-03 12:15:10,674 [INFO]   Filas seleccionadas: 12
+2026-04-03 12:15:10,674 [INFO]   Procesados:          8
+2026-04-03 12:15:10,675 [INFO]   Pendientes:          4
+2026-04-03 12:15:10,676 [INFO]   Tiempo:              0.71 segundos
+2026-04-03 12:15:10,677 [INFO]   Pendientes CSV:      C:\Users\ferna\Videos\fracmen_auto\logs\pendientes.csv
+2026-04-03 12:15:10,678 [INFO]   Log completo:        C:\Users\ferna\Videos\fracmen_auto\logs\process.log
+2026-04-03 12:15:10,679 [INFO] ============================================================

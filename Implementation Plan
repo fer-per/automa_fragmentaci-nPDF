@@ -1,0 +1,237 @@
+# Sistema de Automatización Archivística - Plan de Implementación
+
+## Descripción del Problema
+
+El sistema procesa un archivo **Excel `.xlsx`** con metadatos de documentos históricos (puede contener 5,000+ filas) y un **PDF escaneado** de tamaño variable (200 a 2,000+ páginas). Para cada registro del Excel, se extrae el rango de páginas PDF correspondiente según la notación de folios (r/v), se genera un PDF individual y se almacena en una estructura de carpetas automática.
+
+El sistema debe ser robusto ante errores, continuar sin detenerse ante problemas individuales, y escalar correctamente para volúmenes grandes.
+
+---
+
+## Análisis del Excel Real
+
+Del archivo `excel.xml` se identificaron estas columnas clave:
+
+| Columna | Descripción | Ejemplo |
+|---|---|---|
+| `N° DE REGISTRO` | ID único del registro | `1`, `2`, ... |
+| `ESCRIBANO/NOTARIO` | Nombre del escribano | `PORTUGAL, Cesar` |
+| `N° DE PROT.` | Número de protocolo | `1` |
+| `N° DE FOLIOS` | Rango de folios (r/v) | `1r-1v`, `4r-6v`, `7r`, `7v-8r` |
+| `DATA TOPICA(Lugar)` | Lugar | `Arequipa` |
+| `DATA CRONICA` | Fecha (FECHA INICIAL) | `7/5/1567` |
+| `TITULO/ESCRITURA` | Tipo de escritura | `Obligacion`, `Testamento` |
+| `INTERESADO 1` | Nombre → carpeta padre | `Diego de Aramburu` |
+| `INTERESADO 2` | Nombre → nombre del PDF | `Antonio de Oviedo` |
+| `OBSERVACIONES` | Notas especiales | `Falta 1r` |
+
+> [!NOTE]
+> Las filas 1-9 del Excel son encabezados institucionales. Los datos reales comienzan en la fila 10 (header en fila 8).
+> Las filas 21-30 en el ejemplo tienen `N° DE FOLIOS` vacío → serán marcadas como pendientes automáticamente.
+> En producción el Excel puede tener **5,000 o más filas** de registros reales.
+
+---
+
+## Algoritmo de Segmentación de Folios
+
+### Notación r/v → Página PDF
+
+Cada **hoja física** tiene 2 caras: `r` (recto = frente) y `v` (vuelta = reverso).
+
+```
+Hoja 1 → recto = página 1 del PDF, vuelta = página 2
+Hoja 2 → recto = página 3, vuelta = página 4
+Hoja N → recto = página (2N-1), vuelta = página 2N
+```
+
+**Fórmula de conversión:**
+```python
+folio_r(N) = 2*N - 1   # página PDF del recto
+folio_v(N) = 2*N       # página PDF de la vuelta
+```
+
+### Casos Soportados
+
+| Formato | Ejemplo | Páginas PDF extraídas |
+|---|---|---|
+| Rango completo | `1r-1v` | pp. 1, 2 |
+| Rango multi-hoja | `4r-6v` | pp. 7, 8, 9, 10, 11, 12 |
+| Solo recto | `7r` | p. 13 |
+| Cruzado (v→r) | `7v-8r` | pp. 14, 15 |
+| Rango vuelta | `8v-12r` | pp. 16, 17, 18, 19, 20, 21, 22, 23 |
+| Solo vuelta | `13v` | p. 26 |
+
+---
+
+## Estructura del Proyecto
+
+```
+fracmen_auto/
+├── main.py                  # Punto de entrada principal
+├── config.py                # Configuración centralizada
+├── modules/
+│   ├── excel_reader.py      # Lectura y parsing del Excel (.xlsx)
+│   ├── folio_parser.py      # Algoritmo r/v → páginas PDF
+│   ├── pdf_extractor.py     # Extracción y generación de PDFs
+│   ├── folder_builder.py    # Creación de estructura de carpetas
+│   └── validator.py         # Validación y detección de errores
+├── output/                  # Carpeta de salida generada (raíz por escribano)
+├── logs/
+│   ├── process.log          # Log completo de ejecución
+│   └── pendientes.csv       # Registros con problemas (no procesados)
+├── generate_test_pdf.py     # Script auxiliar: genera PDF sintético de prueba
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## Propuesta de Cambios
+
+### Módulo 1: Lectura del Excel
+
+#### [NEW] modules/excel_reader.py
+
+- Lee el archivo **Excel `.xlsx`** con `pandas` + `openpyxl`, `skiprows=8` para saltar headers institucionales
+- Diseñado para manejar **5,000+ filas** eficientemente (lectura por chunks si es necesario)
+- Normaliza nombres de columnas (strip de espacios, caracteres especiales)
+- Devuelve un DataFrame limpio con solo los campos necesarios
+- Detecta filas completamente vacías y las filtra
+
+#### [NEW] generate_test_pdf.py
+
+- Script auxiliar que genera un **PDF sintético de prueba** (N páginas numeradas)
+- Permite probar el sistema sin necesidad del PDF real
+- Se ejecuta una sola vez: `python generate_test_pdf.py --pages 40`
+
+#### [NEW] modules/folio_parser.py
+
+- Función `parse_folio_range(texto)` → retorna lista de números de página PDF
+- Regex: `(\d+)(r|v)(?:-(\d+)(r|v))?`
+- Valida que el rango sea secuencialmente coherente
+- Retorna `None` + mensaje de error si el formato es inválido
+
+#### [NEW] modules/validator.py
+
+- Valida cada registro antes de procesarlo
+- Detecta: folios vacíos, formato inválido, páginas fuera del rango del PDF
+- Detecta: saltos en la secuencia (`100v → 103r`, faltarían `101r, 101v, 102r, 102v`)
+- Devuelve: `(is_valid: bool, error_msg: str)`
+
+#### [NEW] modules/pdf_extractor.py
+
+- Usa `pypdf` (sucesor moderno de PyPDF2)
+- Función `extract_pages(pdf_path, page_numbers)` → genera nuevo PDF en memoria
+- Escribe el PDF en la ruta de destino
+- Maneja índice 0-based vs. 1-based correctamente
+
+#### [NEW] modules/folder_builder.py
+
+- Construye la ruta de salida según la **estructura real confirmada**:
+  ```
+  output/
+  └── [Escribano]/                          ← raíz por escribano
+      └── [Año] - Protocolo N° X/           ← agrupación por año y protocolo
+          └── [Tipo de Escritura]/
+              └── [Mes]/
+                  └── [Interesado 1]/
+                      └── [Interesado 2].pdf
+  ```
+  Ejemplo real:
+  ```
+  output/
+  └── PORTUGAL, Cesar/
+      └── 1567 - Protocolo N° 1/
+          └── Obligacion/
+              └── Julio/
+                  └── Diego de Aramburu/
+                      └── Antonio de Oviedo.pdf
+  ```
+- Sanitiza nombres de carpeta (elimina `\/:*?"<>|` inválidos en Windows)
+- Crea directorios con `pathlib.Path.mkdir(parents=True, exist_ok=True)`
+- Maneja colisiones de nombre (ej: dos registros con mismo Interesado 2 en mismo mes)
+
+#### [NEW] main.py
+
+- Orquesta todos los módulos
+- Procesa registro por registro (compatible con 5,000+ registros)
+- Muestra barra de progreso en consola (`tqdm`)
+- Registra problemas en `logs/pendientes.csv` y **continúa sin detenerse**
+- Al terminar, imprime un resumen: total procesados, total pendientes, tiempo transcurrido
+
+#### [NEW] config.py
+
+- Rutas configurables: Excel de entrada (`.xlsx`), PDF de entrada, carpeta de salida
+- Parámetro `SKIP_ROWS` para el header del Excel (actualmente 8)
+- Flag `DRY_RUN`: si es `True`, simula el proceso sin escribir archivos (útil para validar datos antes de procesar)
+
+#### [NEW] requirements.txt
+
+```
+pandas>=2.0
+openpyxl>=3.1
+pypdf>=4.0
+tqdm>=4.0
+reportlab>=4.0   # para generar PDF sintético de prueba
+```
+
+---
+
+## Manejo de Errores
+
+| Error | Detección | Acción |
+|---|---|---|
+| Folios vacíos | Campo `N° DE FOLIOS` nulo/vacío | → pendientes.csv, continúa |
+| Formato inválido | Regex no hace match | → pendientes.csv, continúa |
+| Folio fuera del rango del PDF | Página > total_pages del PDF | → pendientes.csv, continúa |
+| **Salto de secuencia** | Gap entre folios de registros consecutivos (ej: `100v` → `103r`, faltan `101r,101v,102r,102v`) | → **WARNING en log** con detalle exacto (registro N°, folio esperado, folio encontrado) + **pendientes.csv**, NO se procesa ese PDF |
+| Archivo Excel no encontrado | Ruta inválida | → error crítico, detiene todo |
+| Archivo PDF no encontrado | Ruta inválida | → error crítico, detiene todo |
+| Nombre de carpeta inválido | Caracteres `\/:*?"<>\|` | Sanitización automática silenciosa |
+| Colisión de nombre de archivo | Mismo PDF ya existe en la ruta | Agrega sufijo `_2`, `_3`, etc. |
+
+---
+
+## Decisiones Confirmadas
+
+| Pregunta | Respuesta |
+|---|---|
+| Formato del Excel | **`.xlsx`** (se usará `openpyxl` + `pandas`) |
+| PDF de prueba | **Sintético** generado por `generate_test_pdf.py` |
+| Estructura raíz | **Por escribano** → año + protocolo → tipo → mes → interesados |
+| Saltos de secuencia | **Warning en log + pendientes.csv**, el registro NO se procesa |
+
+> [!NOTE]
+> **Escalabilidad:** El sistema debe manejar correctamente PDFs de 200 a 2,000+ páginas y Excels de 5,000+ filas sin degradación de rendimiento. El PDF se abrirá una sola vez y se mantendrá en memoria durante el proceso para evitar I/O repetido.
+
+---
+
+## Plan de Verificación
+
+### Fase 1 - Prueba con datos sintéticos
+1. Ejecutar `python generate_test_pdf.py --pages 40` → genera PDF de 40 páginas
+2. Ejecutar `python main.py` apuntando al `excel.xml` actual y al PDF sintético
+3. Verificar que registros 1-11 (con folios) se procesen → 11 PDFs generados
+4. Verificar que registros 12-21 (sin folios) aparezcan en `pendientes.csv`
+5. Validar la estructura de carpetas generada bajo `output/PORTUGAL, Cesar/`
+
+### Fase 2 - Verificación Manual
+- Abrir PDFs generados y confirmar páginas correctas
+- Revisar `logs/process.log` para ver el detalle de cada operación
+- Revisar `logs/pendientes.csv` y confirmar los 10 registros sin folios
+- Confirmar nombres de carpetas y archivos según convención
+
+### Fase 3 - Prueba de estrés (futuro)
+- Ejecutar con Excel de 5,000+ filas y PDF de 2,000 páginas reales
+- Medir tiempo total de procesamiento
+- Verificar que no haya pérdida de memoria en PDFs grandes
+
+## Recomendaciones de Escalabilidad
+
+| Volumen | Estrategia |
+|---|---|
+| Excel 5,000+ filas | `pandas` lee todo en memoria; si supera 50,000 filas considerar `chunksize` |
+| PDF 2,000+ páginas | Abrir el PDF una sola vez con `pypdf.PdfReader`, reusar el objeto en todos los registros |
+| Múltiples PDFs (uno por protocolo) | `config.py` permitirá especificar un mapa `protocolo → ruta_pdf` |
+| Procesamiento paralelo (futuro) | `concurrent.futures.ThreadPoolExecutor` para escribir PDFs en paralelo |
+

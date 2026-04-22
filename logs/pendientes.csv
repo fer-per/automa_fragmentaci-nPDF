@@ -1,0 +1,19 @@
+﻿N° DE REGISTRO,ESCRIBANO/NOTARIO,N° DE FOLIOS,TITULO/ESCRITURA,INTERESADO 1,INTERESADO 2,MOTIVO
+,,,,,,Folios vacíos o nulos
+9,"PORTUGAL, Cesar",13r-15v,Testamento,Gaspar,Leonor de Villalobos,Salto de secuencia detectado: se esperaba página 26 pero se encontró página 25 (folios '13r-15v'). Páginas faltantes: []
+10,"PORTUGAL, Cesar",16r-18r,Codicilio,Baltasar de la Cruz,Juana,"Salto de secuencia detectado: se esperaba página 26 pero se encontró página 31 (folios '16r-18r'). Páginas faltantes: [26, 27, 28, 29, 30]"
+11,"PORTUGAL, Cesar",18v-19r,Compañia,Rodrigo,Beatriz de Salinas,"Salto de secuencia detectado: se esperaba página 26 pero se encontró página 36 (folios '18v-19r'). Páginas faltantes: [26, 27, 28, 29, 30, 31, 32, 33, 34, 35]"
+12,"PORTUGAL, Cesar",,Fletamento,Alonso de Herrera,María,Folios vacíos o nulos
+13,"PORTUGAL, Cesar",,Venta,Hernán,Catalina de Ribera,Folios vacíos o nulos
+14,"PORTUGAL, Cesar",,Ceción,Diego de Ocampo,Isabel,Folios vacíos o nulos
+15,"PORTUGAL, Cesar",,Traspaso,Francisco,Elvira de Mendoza,Folios vacíos o nulos
+16,"PORTUGAL, Cesar",,Pago,Gonzalo de Vargas,Teresa,Folios vacíos o nulos
+17,"PORTUGAL, Cesar",,Servicio,Gaspar,Ana de Córdoba,Folios vacíos o nulos
+18,"PORTUGAL, Cesar",,Escritura Perdon,Francisco de Toledo,Inés,Folios vacíos o nulos
+19,"PORTUGAL, Cesar",,Recibo,Alonso Pérez,Leonor de Villalobos,Folios vacíos o nulos
+20,"PORTUGAL, Cesar",,Poder,Hernando de Soto,Juana,Folios vacíos o nulos
+21,"PORTUGAL, Cesar",,Obligacion,Diego Velázquez,Beatriz de Salinas,Folios vacíos o nulos
+,,,,,,Folios vacíos o nulos
+9,"PORTUGAL, Cesar",13r-15v,Testamento,Gaspar,Leonor de Villalobos,Salto de secuencia detectado: se esperaba página 26 pero se encontró página 25 (folios '13r-15v'). Páginas faltantes: []
+10,"PORTUGAL, Cesar",16r-18r,Codicilio,Baltasar de la Cruz,Juana,"Salto de secuencia detectado: se esperaba página 26 pero se encontró página 31 (folios '16r-18r'). Páginas faltantes: [26, 27, 28, 29, 30]"
+11,"PORTUGAL, Cesar",18v-19r,Compañia,Rodrigo,Beatriz de Salinas,"Salto de secuencia detectado: se esperaba página 26 pero se encontró página 36 (folios '18v-19r'). Páginas faltantes: [26, 27, 28, 29, 30, 31, 32, 33, 34, 35]"
