@@ -14,11 +14,17 @@ import queue
 
 # ── Imports del proyecto ──
 import config
-from modules.excel_reader import load_excel
-from modules.folio_parser import parse_folio_range, last_page_of_range
+from modules.excel_reader import load_excel, load_excel_metadata
+from modules.folio_parser import (
+    parse_folio_range, last_page_of_range, analyze_folio_sequence,
+    folio_text_to_page_abs, _folio_to_page_abs, _find_segment,
+    adjust_pages_for_missing_folios,
+)
 from modules.pdf_extractor import open_pdf, extract_pages
 from modules.folder_builder import build_output_path
 from modules.validator import validate_record
+from modules.data_topica_analyzer import analyze_data_topica
+from modules.data_cronica_analyzer import analyze_data_cronica
 
 
 # ─── Colores y estilos ───────────────────────────────────────────────────────
@@ -112,6 +118,10 @@ class App(tk.Tk):
         self.df         = None
         self.processing = False
         self.cancel_flag = False
+
+        # Offset de inicio (folio Excel vs. página PDF)
+        self.folio_inicio_excel = 1   # número de folio con que inicia el protocolo en el Excel
+        self.pdf_page_inicio    = 1   # página del PDF donde empieza la primera imagen del protocolo
 
         # Cola para logs en tiempo real
         self.log_queue = queue.Queue()
@@ -304,6 +314,321 @@ class App(tk.Tk):
         hint_0 = tk.Label(range_frame, text="", font=FONT_SMALL,
                           bg=BG_CARD, fg=FG_MUTED)
         hint_0.pack(side="left")
+
+        # ══════════════════════════════════════════════════════════════════
+        # PASO 2b: Configuración de inicio de folios / PDF
+        # ══════════════════════════════════════════════════════════════════
+        self._step_header("②b", "Configuración de inicio",
+                          "Indica desde qué folio empieza el protocolo y desde qué página del PDF.")
+
+        offset_card = self._make_card()
+        offset_row = tk.Frame(offset_card, bg=BG_CARD)
+        offset_row.pack(padx=16, pady=(14, 10))
+
+        tk.Label(offset_row, text="Folio inicio del Excel:",
+                 font=FONT_BOLD, bg=BG_CARD, fg=FG).pack(side="left", padx=(0, 5))
+        self.spin_folio_ini = tk.Spinbox(
+            offset_row, from_=1, to=99999, width=7, font=FONT,
+            bg=BG_INPUT, fg=FG, buttonbackground=BG_CARD,
+            insertbackground=FG, relief="flat", justify="center",
+            command=self._on_offset_change,
+        )
+        self.spin_folio_ini.delete(0, "end")
+        self.spin_folio_ini.insert(0, "1")
+        self.spin_folio_ini.pack(side="left", padx=(0, 20))
+        self.spin_folio_ini.bind("<FocusOut>", lambda e: self._on_offset_change())
+        ToolTip(self.spin_folio_ini,
+                "Número de folio con el que EMPIEZA el protocolo en el Excel.\n"
+                "Ej.: si el Excel inicia en '30r', escribe 30.\n"
+                "Si empieza en '1r', déjalo en 1 (valor por defecto).")
+
+        tk.Label(offset_row, text="Página PDF de inicio:",
+                 font=FONT_BOLD, bg=BG_CARD, fg=FG).pack(side="left", padx=(0, 5))
+        self.spin_pdf_ini = tk.Spinbox(
+            offset_row, from_=1, to=99999, width=7, font=FONT,
+            bg=BG_INPUT, fg=FG, buttonbackground=BG_CARD,
+            insertbackground=FG, relief="flat", justify="center",
+            command=self._on_offset_change,
+        )
+        self.spin_pdf_ini.delete(0, "end")
+        self.spin_pdf_ini.insert(0, "1")
+        self.spin_pdf_ini.pack(side="left", padx=(0, 10))
+        self.spin_pdf_ini.bind("<FocusOut>", lambda e: self._on_offset_change())
+        ToolTip(self.spin_pdf_ini,
+                "Número de página REAL del PDF donde empieza la primera imagen del protocolo.\n"
+                "Ej.: si hay 2 portadas antes, escribe 3.\n"
+                "Si no hay portadas, déjalo en 1 (valor por defecto).")
+
+        self.lbl_offset_info = tk.Label(
+            offset_card,
+            text="  -> La primera imagen del PDF corresponde al folio 1r del protocolo.",
+            font=FONT_SMALL, bg=BG_CARD, fg=FG_MUTED, anchor="w",
+        )
+        self.lbl_offset_info.pack(fill="x", padx=16, pady=(0, 6))
+
+        # ── Segmentos adicionales (para saltos en el PDF) ─────────────────
+        seg_lbl = tk.Label(
+            offset_card,
+            text="  Segmentos adicionales (cuando el PDF no contiene los folios del salto):",
+            font=FONT_SMALL, bg=BG_CARD, fg=FG_DIM, anchor="w",
+        )
+        seg_lbl.pack(fill="x", padx=16, pady=(2, 4))
+
+        seg_frame = tk.Frame(offset_card, bg=BG_CARD)
+        seg_frame.pack(fill="x", padx=16, pady=(0, 4))
+
+        # Treeview de segmentos
+        self.tree_segs = ttk.Treeview(
+            seg_frame, columns=("folio", "pdf_pag"), show="headings",
+            height=3, style="Dark.Treeview",
+        )
+        self.tree_segs.heading("folio",   text="Folio inicio Excel")
+        self.tree_segs.heading("pdf_pag", text="Pagina PDF inicio")
+        self.tree_segs.column("folio",   width=160, anchor="center")
+        self.tree_segs.column("pdf_pag", width=160, anchor="center")
+        self.tree_segs.pack(side="left", fill="x", expand=True)
+
+        seg_btn_frame = tk.Frame(seg_frame, bg=BG_CARD)
+        seg_btn_frame.pack(side="left", padx=(8, 0))
+
+        # Entradas para nuevo segmento
+        ent_row = tk.Frame(offset_card, bg=BG_CARD)
+        ent_row.pack(fill="x", padx=16, pady=(2, 8))
+
+        tk.Label(ent_row, text="Folio (ej: 401r, 53v):", font=FONT_SMALL,
+                 bg=BG_CARD, fg=FG).pack(side="left", padx=(0, 3))
+        self.ent_seg_folio = tk.Entry(
+            ent_row, width=9, font=FONT, bg=BG_INPUT, fg=FG,
+            insertbackground=FG, relief="flat", justify="center",
+        )
+        self.ent_seg_folio.insert(0, "401r")
+        self.ent_seg_folio.pack(side="left", padx=(0, 10))
+
+        tk.Label(ent_row, text="Pagina PDF:", font=FONT_SMALL,
+                 bg=BG_CARD, fg=FG).pack(side="left", padx=(0, 3))
+        self.ent_seg_pag = tk.Entry(
+            ent_row, width=7, font=FONT, bg=BG_INPUT, fg=FG,
+            insertbackground=FG, relief="flat", justify="center",
+        )
+        self.ent_seg_pag.insert(0, "635")
+        self.ent_seg_pag.pack(side="left", padx=(0, 10))
+
+        btn_add_seg = self._make_button(ent_row, "+ Agregar", self._add_segment, width=10)
+        btn_add_seg.pack(side="left", padx=(0, 6))
+        ToolTip(btn_add_seg,
+                "Agrega un segmento: indica desde que folio del Excel\n"
+                "empieza la siguiente seccion en el PDF.\n"
+                "Util cuando el PDF no contiene los folios del salto.")
+
+        btn_del_seg = self._make_button(ent_row, "- Eliminar", self._del_segment, width=10)
+        btn_del_seg.configure(bg="#4a4a6a")
+        btn_del_seg.pack(side="left")
+        ToolTip(btn_del_seg, "Elimina el segmento seleccionado en la tabla.")
+
+        # ── Páginas a ignorar ────────────────────────────────────────────
+        tk.Frame(offset_card, bg=BORDER, height=1).pack(fill="x", padx=16, pady=(6, 0))
+
+        ign_lbl = tk.Label(
+            offset_card,
+            text="  Páginas PDF a ignorar (hojas que NO deben incluirse en ningún documento):",
+            font=FONT_SMALL, bg=BG_CARD, fg=FG_DIM, anchor="w",
+        )
+        ign_lbl.pack(fill="x", padx=16, pady=(6, 4))
+
+        ign_frame = tk.Frame(offset_card, bg=BG_CARD)
+        ign_frame.pack(fill="x", padx=16, pady=(0, 4))
+
+        self.tree_ignore = ttk.Treeview(
+            ign_frame, columns=("entrada", "paginas"), show="headings",
+            height=3, style="Dark.Treeview",
+        )
+        self.tree_ignore.heading("entrada", text="Entrada")
+        self.tree_ignore.heading("paginas", text="Páginas PDF ignoradas")
+        self.tree_ignore.column("entrada", width=130, anchor="center")
+        self.tree_ignore.column("paginas", width=340, anchor="w")
+        self.tree_ignore.pack(side="left", fill="x", expand=True)
+
+        ign_scroll = ttk.Scrollbar(ign_frame, orient="vertical",
+                                    command=self.tree_ignore.yview)
+        self.tree_ignore.configure(yscrollcommand=ign_scroll.set)
+        ign_scroll.pack(side="right", fill="y")
+
+        ign_ent_row = tk.Frame(offset_card, bg=BG_CARD)
+        ign_ent_row.pack(fill="x", padx=16, pady=(2, 10))
+
+        tk.Label(ign_ent_row, text="Pág. o rango (ej: 5  ó  10-15):",
+                 font=FONT_SMALL, bg=BG_CARD, fg=FG).pack(side="left", padx=(0, 4))
+        self.ent_ignore_pag = tk.Entry(
+            ign_ent_row, width=10, font=FONT, bg=BG_INPUT, fg=FG,
+            insertbackground=FG, relief="flat", justify="center",
+        )
+        self.ent_ignore_pag.insert(0, "5")
+        self.ent_ignore_pag.pack(side="left", padx=(0, 10))
+        ToolTip(self.ent_ignore_pag,
+                "Escribe una pagina simple (ej: 5)\n"
+                "o un rango (ej: 10-15) para ignorar varias a la vez.")
+
+        btn_add_ign = self._make_button(
+            ign_ent_row, "+ Ignorar", self._add_ignored_page, width=10)
+        btn_add_ign.configure(bg="#7c3d2a")
+        btn_add_ign.bind("<Enter>", lambda e: btn_add_ign.configure(bg="#a0532f"))
+        btn_add_ign.bind("<Leave>", lambda e: btn_add_ign.configure(bg="#7c3d2a"))
+        btn_add_ign.pack(side="left", padx=(0, 6))
+        ToolTip(btn_add_ign,
+                "Agrega la pagina o rango indicado a la lista de exclusion.\n"
+                "Esas paginas seran omitidas en todos los documentos generados.")
+
+        btn_del_ign = self._make_button(
+            ign_ent_row, "- Quitar", self._del_ignored_page, width=10)
+        btn_del_ign.configure(bg="#4a4a6a")
+        btn_del_ign.pack(side="left")
+        ToolTip(btn_del_ign, "Quita la entrada seleccionada de la lista de ignorados.")
+
+        # ── Folios a ignorar (solo afecta el conteo, NO el PDF extraído) ──
+        tk.Frame(offset_card, bg="#3a2a10", height=1).pack(fill="x", padx=16, pady=(2, 0))
+
+        ign_folio_lbl = tk.Label(
+            offset_card,
+            text="  Folios a ignorar — solo excluye del conteo de folios (el PDF se extrae completo):",
+            font=FONT_SMALL, bg=BG_CARD, fg=FG_DIM, anchor="w",
+        )
+        ign_folio_lbl.pack(fill="x", padx=16, pady=(6, 2))
+
+        ign_folio_tree_frame = tk.Frame(offset_card, bg=BG_CARD)
+        ign_folio_tree_frame.pack(fill="x", padx=16, pady=(0, 4))
+
+        self.tree_ignore_folios = ttk.Treeview(
+            ign_folio_tree_frame, columns=("entrada", "detalle"), show="headings",
+            height=3, style="Dark.Treeview",
+        )
+        self.tree_ignore_folios.heading("entrada", text="Folio(s) ignorado(s)")
+        self.tree_ignore_folios.heading("detalle", text="Posiciones excluidas del conteo")
+        self.tree_ignore_folios.column("entrada", width=130, anchor="center")
+        self.tree_ignore_folios.column("detalle", width=340, anchor="w")
+        self.tree_ignore_folios.pack(side="left", fill="x", expand=True)
+
+        ign_folio_scroll2 = ttk.Scrollbar(ign_folio_tree_frame, orient="vertical",
+                                           command=self.tree_ignore_folios.yview)
+        self.tree_ignore_folios.configure(yscrollcommand=ign_folio_scroll2.set)
+        ign_folio_scroll2.pack(side="right", fill="y")
+
+        ign_folio_row = tk.Frame(offset_card, bg=BG_CARD)
+        ign_folio_row.pack(fill="x", padx=16, pady=(2, 4))
+
+        tk.Label(ign_folio_row, text="Folio (ej: 40r  ó  40r-41v):",
+                 font=FONT_SMALL, bg=BG_CARD, fg=FG).pack(side="left", padx=(0, 4))
+        self.ent_ignore_folio = tk.Entry(
+            ign_folio_row, width=12, font=FONT, bg=BG_INPUT, fg=FG,
+            insertbackground=FG, relief="flat", justify="center",
+        )
+        self.ent_ignore_folio.insert(0, "40r")
+        self.ent_ignore_folio.pack(side="left", padx=(0, 10))
+        ToolTip(self.ent_ignore_folio,
+                "Escribe el folio como aparece en el Excel: 40r, 40v, 40r-41v.\n"
+                "Esas posiciones se excluirán del conteo de folios.\n"
+                "El PDF se extrae completo sin omitir ninguna página.")
+
+        btn_add_ign_folio = self._make_button(
+            ign_folio_row, "+ Ignorar Folio", self._add_ignored_folio, width=14)
+        btn_add_ign_folio.configure(bg="#5a3a00")
+        btn_add_ign_folio.bind("<Enter>", lambda e: btn_add_ign_folio.configure(bg="#7a5200"))
+        btn_add_ign_folio.bind("<Leave>", lambda e: btn_add_ign_folio.configure(bg="#5a3a00"))
+        btn_add_ign_folio.pack(side="left", padx=(0, 6))
+        ToolTip(btn_add_ign_folio,
+                "Agrega el rango de folios a la lista de exclusión de conteo.\n"
+                "Solo afecta cuántas páginas se asignan al registro.\n"
+                "El PDF se extrae completo (sin saltar páginas).")
+
+        btn_del_ign_folio = self._make_button(
+            ign_folio_row, "- Quitar", self._del_ignored_folio, width=10)
+        btn_del_ign_folio.configure(bg="#4a4a6a")
+        btn_del_ign_folio.pack(side="left")
+        ToolTip(btn_del_ign_folio, "Quita la entrada seleccionada de la lista de folios ignorados.")
+
+        self.lbl_ignore_folio_preview = tk.Label(
+            offset_card,
+            text="  →  Escribe un folio y pulsa el botón para agregarlo al conteo ignorado.",
+            font=FONT_SMALL, bg=BG_CARD, fg=FG_MUTED, anchor="w",
+        )
+        self.lbl_ignore_folio_preview.pack(fill="x", padx=16, pady=(0, 2))
+
+        self.lbl_ignore_folio_count = tk.Label(
+            offset_card,
+            text="  Sin folios ignorados en el conteo.",
+            font=FONT_SMALL, bg=BG_CARD, fg=FG_MUTED, anchor="w",
+        )
+        self.lbl_ignore_folio_count.pack(fill="x", padx=16, pady=(0, 8))
+
+        # ══════════════════════════════════════════════════════════════════
+        # PASO 2c: Analizadores
+        # ══════════════════════════════════════════════════════════════════
+        self._step_header("②c", "Analizadores",
+                          "Verifica la sucesión de folios y la DATA TÓPICA antes de fragmentar.")
+
+        analyzer_card = self._make_card()
+        btn_row_an = tk.Frame(analyzer_card, bg=BG_CARD)
+        btn_row_an.pack(padx=16, pady=(14, 6))
+
+        btn_analyze_folios = self._make_button(
+            btn_row_an, "Analizar Folios", self._analyze_folios, width=18)
+        btn_analyze_folios.pack(side="left", padx=(0, 8))
+        ToolTip(btn_analyze_folios,
+                "Verifica que la sucesion de folios del Excel sea continua.\n"
+                "Muestra que hojas o caras faltan si hay saltos.")
+
+        btn_analyze_topica = self._make_button(
+            btn_row_an, "Analizar TOPICA", self._analyze_data_topica, width=18)
+        btn_analyze_topica.pack(side="left", padx=(0, 8))
+        ToolTip(btn_analyze_topica,
+                "Verifica que la columna DATA TOPICA tenga formato correcto.")
+
+        btn_analyze_cronica = self._make_button(
+            btn_row_an, "Analizar CRONICA", self._analyze_data_cronica, width=18)
+        btn_analyze_cronica.pack(side="left", padx=(0, 8))
+        ToolTip(btn_analyze_cronica,
+                "Verifica el formato de fechas (d/m/yyyy) y que las fechas\n"
+                "vayan en orden cronologico progresivo.")
+
+        btn_check_coverage = self._make_button(
+            btn_row_an, "Verificar Cobertura PDF", self._analyze_pdf_coverage, width=22)
+        btn_check_coverage.configure(bg="#2d6a4f")
+        btn_check_coverage.bind("<Enter>", lambda e: btn_check_coverage.configure(bg="#40916c"))
+        btn_check_coverage.bind("<Leave>", lambda e: btn_check_coverage.configure(bg="#2d6a4f"))
+        btn_check_coverage.pack(side="left", padx=(0, 8))
+        ToolTip(btn_check_coverage,
+                "Compara la ultima pagina PDF que usaria el rango configurado\n"
+                "con el total real de paginas del PDF.\n"
+                "Indica si el PDF esta bien alineado o si sobran/faltan hojas.\n"
+                "Se actualiza automaticamente al cambiar segmentos o ignorados.")
+
+        btn_report = self._make_button(
+            btn_row_an, "\U0001f4cb Reporte", self._generate_fragmentation_report, width=14)
+        btn_report.configure(bg="#3a3a7a")
+        btn_report.bind("<Enter>", lambda e: btn_report.configure(bg="#5050aa"))
+        btn_report.bind("<Leave>", lambda e: btn_report.configure(bg="#3a3a7a"))
+        btn_report.pack(side="left")
+        ToolTip(btn_report,
+                "Genera un reporte detallado del mapeo folio \u2192 p\u00e1ginas PDF.\n"
+                "Muestra columnas del Excel y resalta registros afectados\n"
+                "por segmentos, p\u00e1ginas ignoradas o folios ignorados.")
+
+        # Panel de resultados de análisis (texto expandible)
+        self.txt_analyzer = tk.Text(
+            analyzer_card, height=7, bg=BG_INPUT, fg=FG_DIM,
+            font=FONT_LOG, relief="flat", wrap="word",
+            insertbackground=FG, state="disabled",
+            padx=12, pady=10,
+        )
+        an_scroll = ttk.Scrollbar(analyzer_card, orient="vertical",
+                                   command=self.txt_analyzer.yview)
+        self.txt_analyzer.configure(yscrollcommand=an_scroll.set)
+        self.txt_analyzer.pack(side="left", fill="both", expand=True, padx=(16, 0), pady=(6, 14))
+        an_scroll.pack(side="right", fill="y", padx=(0, 16), pady=(6, 14))
+
+        self.txt_analyzer.tag_configure("ok",   foreground=SUCCESS)
+        self.txt_analyzer.tag_configure("warn", foreground=WARNING)
+        self.txt_analyzer.tag_configure("err",  foreground=ERROR)
+        self.txt_analyzer.tag_configure("info", foreground=FG_DIM)
 
         # ══════════════════════════════════════════════════════════════════
         # PASO 3: Carpeta de salida
@@ -602,7 +927,7 @@ class App(tk.Tk):
             escribano = str(row.get(config.COL_ESCRIBANO, "")).strip()[:25]
             prot      = str(row.get(config.COL_PROTOCOLO, "")).strip()
             folios    = str(row.get(config.COL_FOLIOS, "")).strip()
-            titulo    = str(row.get(config.COL_TITULO, "")).strip()[:25]
+            titulo    = str(row.get(config.COL_TITULO_EST, "")).strip()[:25]
             int1      = str(row.get(config.COL_INT1, "")).strip()[:25]
 
             # Limpiar "nan"
@@ -712,12 +1037,784 @@ class App(tk.Tk):
             self._log("Cancelación solicitada. Esperando que termine la fila actual…", "warn")
             self.btn_cancel.config(state="disabled", text="Cancelando…")
 
-    def _run_process(self):
+    def _on_offset_change(self):
+        """Actualiza los valores de offset y refresca la etiqueta descriptiva."""
+        try:
+            fi = int(self.spin_folio_ini.get())
+            pp = int(self.spin_pdf_ini.get())
+            self.folio_inicio_excel = max(1, fi)
+            self.pdf_page_inicio    = max(1, pp)
+        except ValueError:
+            return
+        portadas = self.pdf_page_inicio - 1
+        texto = (
+            f"  Folio {self.folio_inicio_excel}r = pagina {self.pdf_page_inicio} del PDF"
+            + (f"  ({portadas} pag. introductorias)" if portadas > 0 else "")
+        )
+        self.lbl_offset_info.config(text=texto)
+
+    def _add_segment(self):
+        """Agrega un segmento adicional a la tabla usando notacion de folio (401r, 53v, etc.)."""
+        folio_text = self.ent_seg_folio.get().strip()
+        page_abs   = folio_text_to_page_abs(folio_text)
+        if page_abs is None:
+            messagebox.showwarning(
+                "Formato invalido",
+                f"'{folio_text}' no es un folio valido.\n"
+                "Usa el formato: numero + r o v  (ej: 401r, 53v, 30r)"
+            )
+            return
+        try:
+            pag = int(self.ent_seg_pag.get().strip())
+            if pag < 1:
+                raise ValueError
+        except ValueError:
+            messagebox.showwarning("Valor invalido", "Pagina PDF debe ser un numero entero positivo.")
+            return
+        # Mostramos el folio en la tabla pero guardamos page_abs internamente
+        self.tree_segs.insert("", "end", values=(folio_text, pag), tags=(str(page_abs),))
+        self._auto_refresh_coverage()
+
+    def _del_segment(self):
+        """Elimina el segmento seleccionado en la tabla."""
+        selected = self.tree_segs.selection()
+        if not selected:
+            messagebox.showinfo("Sin seleccion", "Selecciona un segmento en la tabla para eliminarlo.")
+            return
+        for item in selected:
+            self.tree_segs.delete(item)
+        self._auto_refresh_coverage()
+
+    # ─── Páginas a ignorar ────────────────────────────────────────────────
+    def _parse_ignore_input(self, texto: str):
+        """
+        Parsea la entrada del usuario para páginas ignoradas.
+        Acepta:
+          - Número simple:  "5"   → {5}
+          - Rango:          "10-15" → {10, 11, 12, 13, 14, 15}
+        Retorna (set_de_paginas, etiqueta_display) o (None, msg_error).
+        """
+        texto = texto.strip()
+        import re as _re
+        m_range = _re.match(r'^(\d+)\s*[-–]\s*(\d+)$', texto)
+        m_single = _re.match(r'^(\d+)$', texto)
+        if m_range:
+            ini = int(m_range.group(1))
+            fin = int(m_range.group(2))
+            if fin < ini:
+                return None, f"Rango incoherente: {ini} > {fin}"
+            if ini < 1:
+                return None, "El numero de pagina debe ser >= 1"
+            return set(range(ini, fin + 1)), f"{ini}-{fin}"
+        elif m_single:
+            n = int(m_single.group(1))
+            if n < 1:
+                return None, "El numero de pagina debe ser >= 1"
+            return {n}, str(n)
+        else:
+            return None, f"Formato no reconocido: '{texto}'\nUsa un numero (ej: 5) o rango (ej: 10-15)"
+
+    def _add_ignored_page(self):
+        """Agrega una pagina o rango de paginas a la lista de ignorados."""
+        texto = self.ent_ignore_pag.get().strip()
+        paginas, etiqueta_o_error = self._parse_ignore_input(texto)
+        if paginas is None:
+            messagebox.showwarning("Entrada invalida", etiqueta_o_error)
+            return
+        # Mostrar en la tabla
+        paginas_sorted = sorted(paginas)
+        detalle = ", ".join(str(p) for p in paginas_sorted[:20])
+        if len(paginas_sorted) > 20:
+            detalle += f" … ({len(paginas_sorted)} paginas)"
+        self.tree_ignore.insert("", "end",
+                                values=(etiqueta_o_error, detalle),
+                                tags=("|".join(str(p) for p in paginas_sorted),))
+        self._refresh_ignore_label()
+        self._auto_refresh_coverage()
+
+    def _del_ignored_page(self):
+        """Elimina la entrada de ignorados seleccionada (pagina o folio)."""
+        selected = self.tree_ignore.selection()
+        if not selected:
+            messagebox.showinfo("Sin seleccion",
+                                "Selecciona una entrada en la tabla de ignorados para eliminarla.")
+            return
+        for item in selected:
+            self.tree_ignore.delete(item)
+        self._refresh_ignore_label()
+        self._auto_refresh_coverage()
+
+    def _add_ignored_folio(self):
+        """
+        Agrega un folio o rango de folios a la lista de exclusión de conteo.
+        Solo afecta cuántas páginas se asignan al registro; el PDF se extrae completo.
+        El usuario escribe: 40r, 40v, 40r-41v, etc.
+        """
+        texto = self.ent_ignore_folio.get().strip()
+        if not texto:
+            messagebox.showwarning("Entrada vacía", "Escribe un folio o rango de folios.")
+            return
+
+        segments = self._get_segments()
+        pages, err = parse_folio_range(texto, segments=segments)
+        if err or not pages:
+            msg = err or "No se pudo calcular páginas para ese folio."
+            self.lbl_ignore_folio_preview.config(text=f"  →  Error: {msg}", fg=ERROR)
+            messagebox.showwarning("Folio inválido", msg)
+            return
+
+        paginas_sorted = sorted(set(pages))
+        detalle = ", ".join(str(p) for p in paginas_sorted[:20])
+        if len(paginas_sorted) > 20:
+            detalle += f" … ({len(paginas_sorted)} posiciones)"
+
+        self.lbl_ignore_folio_preview.config(
+            text=f"  →  '{texto}': {len(paginas_sorted)} posición(es) excluidas del conteo (PDF intacto).",
+            fg=WARNING)
+
+        self.tree_ignore_folios.insert("", "end",
+                                       values=(texto, detalle),
+                                       tags=("|".join(str(p) for p in paginas_sorted),))
+        self._refresh_ignore_folio_label()
+        self._auto_refresh_coverage()
+
+    def _refresh_ignore_label(self):
+        """Actualiza el contador de paginas ignoradas."""
+        total = len(self._get_ignored_pages())
+        if total == 0:
+            self.lbl_ignore_count.config(
+                text="  Sin páginas ignoradas.", fg=FG_MUTED)
+        else:
+            self.lbl_ignore_count.config(
+                text=f"  {total} página(s) PDF serán ignoradas en la fragmentación.",
+                fg=WARNING)
+
+    def _get_ignored_pages(self) -> set:
+        """Devuelve el set completo de paginas PDF a ignorar, uniendo todas las entradas."""
+        result = set()
+        for item in self.tree_ignore.get_children():
+            tags = self.tree_ignore.item(item, "tags")
+            if tags:
+                try:
+                    for p_str in tags[0].split("|"):
+                        if p_str:
+                            result.add(int(p_str))
+                except (ValueError, IndexError):
+                    pass
+        return result
+
+    def _del_ignored_folio(self):
+        """Elimina la entrada seleccionada de la lista de folios ignorados en el conteo."""
+        selected = self.tree_ignore_folios.selection()
+        if not selected:
+            messagebox.showinfo("Sin selección",
+                                "Selecciona un folio en la tabla para eliminarlo.")
+            return
+        for item in selected:
+            self.tree_ignore_folios.delete(item)
+        self._refresh_ignore_folio_label()
+        self._auto_refresh_coverage()
+
+    def _get_ignored_folio_pages(self) -> set:
+        """
+        Devuelve el set de posiciones de página (mapeadas con segmentos) que
+        corresponden a folios ausentes del protocolo.
+        Estas posiciones se excluyen del conteo de páginas por registro;
+        el PDF se extrae sin omitir ninguna página.
+        """
+        result = set()
+        for item in self.tree_ignore_folios.get_children():
+            tags = self.tree_ignore_folios.item(item, "tags")
+            if tags:
+                try:
+                    for p_str in tags[0].split("|"):
+                        if p_str:
+                            result.add(int(p_str))
+                except (ValueError, IndexError):
+                    pass
+        return result
+
+    def _refresh_ignore_folio_label(self):
+        """Actualiza el contador de folios ignorados en el conteo."""
+        total = len(self._get_ignored_folio_pages())
+        if total == 0:
+            self.lbl_ignore_folio_count.config(
+                text="  Sin folios ignorados en el conteo.", fg=FG_MUTED)
+        else:
+            self.lbl_ignore_folio_count.config(
+                text=f"  {total} posición(es) de folio excluidas del conteo (PDF se extrae completo).",
+                fg=WARNING)
+
+    def _auto_refresh_coverage(self):
+        """Re-ejecuta el analisis de cobertura PDF si hay Excel y PDF cargados."""
+        if self.df is not None and self.pdf_path is not None:
+            self._analyze_pdf_coverage()
+
+    def _generate_fragmentation_report(self):
+        """
+        Genera una ventana con el reporte detallado de fragmentacion:
+          - Configuracion activa (segmentos, paginas ignoradas, folios ignorados)
+          - Columnas del Excel usadas
+          - Mapeo fila -> folio -> paginas PDF con flags de modificacion
+        """
+        import time as _time
+
+        if self.df is None:
+            messagebox.showwarning("Sin datos", "Primero carga un archivo Excel.")
+            return
+
+        segments           = self._get_segments()
+        ignored_pages      = self._get_ignored_pages()
+        ignored_folio_pgs  = self._get_ignored_folio_pages()
+
+        # ── Recopilar entradas de segmentos con etiquetas ──────────────────
+        seg_labels = []
+        for item in self.tree_segs.get_children():
+            vals = self.tree_segs.item(item, "values")
+            seg_labels.append(f"Folio {vals[0]} → Pág. PDF {vals[1]}")
+
+        ign_page_labels = []
+        for item in self.tree_ignore.get_children():
+            vals = self.tree_ignore.item(item, "values")
+            ign_page_labels.append(f"{vals[0]}  →  {vals[1]}")
+
+        ign_folio_labels = []
+        for item in self.tree_ignore_folios.get_children():
+            vals = self.tree_ignore_folios.item(item, "values")
+            ign_folio_labels.append(f"{vals[0]}  →  {vals[1]}")
+
+        # ── Construir texto del reporte ────────────────────────────────────
+        SEP  = "═" * 68
+        SEP2 = "─" * 68
+        lines = []
+        ts = _time.strftime("%Y-%m-%d  %H:%M:%S")
+
+        lines.append(SEP)
+        lines.append("  REPORTE DE FRAGMENTACIÓN")
+        lines.append(f"  Generado: {ts}")
+        if self.excel_path:
+            lines.append(f"  Excel   : {self.excel_path.name}")
+        if self.pdf_path:
+            lines.append(f"  PDF     : {self.pdf_path.name}")
+        lines.append(SEP)
+
+        # Configuración activa
+        lines.append("")
+        lines.append("  ── CONFIGURACIÓN ACTIVA ──────────────────────────────────────")
+        lines.append("")
+        lines.append(f"  Folio inicio Excel : {self.folio_inicio_excel}r   →  Pág. PDF inicio: {self.pdf_page_inicio}")
+        lines.append("")
+
+        if seg_labels:
+            lines.append("  [SALTO PDF]  Segmentos adicionales:")
+            for s in seg_labels:
+                lines.append(f"    • {s}")
+        else:
+            lines.append("  [SALTO PDF]  Sin segmentos adicionales.")
+        lines.append("")
+
+        if ign_page_labels:
+            lines.append("  [PAG-IGN]  Páginas PDF ignoradas (excluidas del output):")
+            for s in ign_page_labels:
+                lines.append(f"    • {s}")
+        else:
+            lines.append("  [PAG-IGN]  Sin páginas PDF ignoradas.")
+        lines.append("")
+
+        if ign_folio_labels:
+            lines.append("  [FOL-IGN]  Folios ignorados en el conteo (PDF intacto):")
+            for s in ign_folio_labels:
+                lines.append(f"    • {s}")
+        else:
+            lines.append("  [FOL-IGN]  Sin folios ignorados en el conteo.")
+        lines.append("")
+
+        # Columnas del Excel
+        import config as _cfg
+        lines.append(SEP2)
+        lines.append("  COLUMNAS DEL EXCEL UTILIZADAS")
+        lines.append(SEP2)
+        col_map = [
+            ("Folios",        _cfg.COL_FOLIOS),
+            ("Registro",      _cfg.COL_REGISTRO),
+            ("Escribano",     _cfg.COL_ESCRIBANO.replace("\n", " ")),
+            ("Protocolo",     _cfg.COL_PROTOCOLO),
+            ("Lugar (Tóp.)",  _cfg.COL_LUGAR),
+            ("Fecha inicial", _cfg.COL_FECHA_INI),
+            ("Título est.",   _cfg.COL_TITULO_EST),
+            ("Interesado 1",  _cfg.COL_INT1),
+            ("Interesado 2",  _cfg.COL_INT2),
+            ("Observaciones", _cfg.COL_OBS),
+        ]
+        for label, col in col_map:
+            lines.append(f"  {label:<15} : {col}")
+        lines.append("")
+
+        # Mapeo folio → páginas PDF
+        lines.append(SEP2)
+        lines.append("  MAPEO  FILA → FOLIO(S) → PÁGINAS PDF")
+        lines.append(SEP2)
+        hdr = f"  {'Fila':<6} {'Reg.':<6} {'Folio(s)':<14} {'Págs. PDF (inicio-fin)':<28} {'Flags'}"
+        lines.append(hdr)
+        lines.append("  " + "-" * 66)
+
         try:
             row_start = int(self.spin_start.get())
             row_end   = int(self.spin_end.get())
+        except ValueError:
+            row_start, row_end = 0, 0
+
+        df_slice = self.df.copy()
+        if row_start > 0:
+            df_slice = df_slice[df_slice.index >= row_start]
+        if row_end > 0:
+            df_slice = df_slice[df_slice.index <= row_end]
+
+        prev_active_seg = segments[0] if segments else None
+        prev_pdf_last   = None
+        prev_fila       = None
+
+        for fila_excel, row in df_slice.iterrows():
+            folio_str = str(row.get(_cfg.COL_FOLIOS, "")).strip()
+            reg       = str(row.get(_cfg.COL_REGISTRO, "")).strip()
+            if not folio_str or folio_str.lower() == "nan":
+                lines.append(f"  {str(fila_excel):<6} {reg:<6} {'(sin folio)':<14} {'—':<28}")
+                prev_fila = fila_excel
+                continue
+
+            pages, err = parse_folio_range(folio_str, segments=segments)
+            if err or not pages:
+                lines.append(f"  {str(fila_excel):<6} {reg:<6} {folio_str:<14} ERROR: {err}")
+                prev_fila = fila_excel
+                continue
+
+            # Ajustar por folios físicamente ausentes (shift solo en el segmento activo)
+            nominal_pages = pages[:]
+            if ignored_folio_pgs:
+                # Calcular active_seg para este registro
+                _first_txt = folio_str.split('-')[0].strip()
+                _abs_ini   = folio_text_to_page_abs(_first_txt)
+                _act_seg   = _find_segment(_abs_ini, segments) if _abs_ini and len(segments) > 1 else (segments[0] if segments else None)
+                pages = adjust_pages_for_missing_folios(
+                    pages, ignored_folio_pgs, active_seg=_act_seg, segments=segments
+                )
+            else:
+                pages = list(pages)
+
+            if not pages:
+                lines.append(f"  {str(fila_excel):<6} {reg:<6} {folio_str:<14} (sin páginas efectivas)")
+                prev_fila = fila_excel
+                continue
+
+            p_min, p_max = pages[0], pages[-1]
+            sub_lines    = []   # líneas de detalle con excepciones
+
+            # ── Cambio de segmento ─────────────────────────────────────────
+            seg_changed = False
+            if len(segments) > 1:
+                first_folio_txt = folio_str.split('-')[0].strip()
+                abs_ini = folio_text_to_page_abs(first_folio_txt)
+                if abs_ini is not None:
+                    active_seg = _find_segment(abs_ini, segments)
+                    if active_seg != prev_active_seg:
+                        seg_changed = True
+                        sep = (
+                            f"  {'':6} {'':6}  ↳ CAMBIO DE SEGMENTO"
+                            + (f" (fila {prev_fila} terminó en pág. {prev_pdf_last})" if prev_pdf_last else "")
+                            + f"  →  nuevo segmento inicia en pág.PDF {active_seg[1]}"
+                        )
+                        lines.append(sep)
+                    prev_active_seg = active_seg
+
+            # ── Sucesión con el registro anterior (mismo segmento) ────────────
+            if prev_pdf_last is not None and not seg_changed:
+                expected = prev_pdf_last + 1
+                if p_min > expected:
+                    sub_lines.append(
+                        f"             ⚠ BRECHA: {p_min - expected} pág(s) sin asignar "
+                        f"(págs. {expected}–{p_min-1}) tras fila {prev_fila}"
+                    )
+                elif p_min < expected:
+                    sub_lines.append(
+                        f"             ⚠ SOLAPAMIENTO: {expected - p_min} pág(s) "
+                        f"compartidas con fila {prev_fila} (desde pág. {p_min})"
+                    )
+
+            # ── Páginas PDF ignoradas en este rango ───────────────────────
+            pag_ign = sorted(p for p in nominal_pages if p in ignored_pages) if ignored_pages else []
+            if pag_ign:
+                sub_lines.append(
+                    f"             ↳ [PAG-IGN] Excluidas del output PDF: "
+                    f"{pag_ign[:10]}{'…' if len(pag_ign)>10 else ''}"
+                )
+
+            # ── Folios ignorados ──────────────────────────────
+            fol_nom_ign = sorted(p for p in nominal_pages if p in ignored_folio_pgs) if ignored_folio_pgs else []
+            if fol_nom_ign:
+                n_missing = len(fol_nom_ign)
+                shift_val = sum(1 for ign in fol_nom_ign if ign <= p_max)
+                sub_lines.append(
+                    f"             ↳ [FOL-IGN] {n_missing} folio(s) ausentes del escaneo: "
+                    f"{fol_nom_ign[:10]}{'…' if n_missing>10 else ''} "
+                    f"(págs. posteriores desplazadas -{shift_val})"
+                )
+
+            # ── Descripción de páginas ──────────────────────────────
+            n_nominal  = len(nominal_pages)
+            n_physical = len(pages)
+            if fol_nom_ign:
+                pag_desc = f"{p_min}–{p_max}  ({n_nominal} nom. → {n_physical} físicas)"
+            else:
+                pag_desc = f"{p_min}–{p_max}  ({len(pages)} págs.)"
+
+            inline = ""
+            if seg_changed:       inline = "[NUEVO SEG.]"
+            elif pag_ign:         inline = f"[{len(pag_ign)} pag.ignorada(s)]"
+            elif fol_nom_ign:     inline = f"[{len(fol_nom_ign)} folio(s) ausentes]"
+            elif sub_lines:       inline = "[VER DETALLE ↓]"
+
+            lines.append(f"  {str(fila_excel):<6} {reg:<6} {folio_str:<14} {pag_desc:<34} {inline}")
+            lines.extend(sub_lines)
+
+            prev_pdf_last = p_max
+            prev_fila     = fila_excel
+
+        lines.append("")
+        lines.append(SEP)
+        lines.append("  FIN DEL REPORTE")
+        lines.append(SEP)
+        report_text = "\n".join(lines)
+
+        # ── Ventana de reporte ─────────────────────────────────────────────
+        win = tk.Toplevel(self)
+        win.title("Reporte de Fragmentación")
+        win.configure(bg=BG)
+        win.geometry("920x620")
+        win.minsize(700, 400)
+
+        top_bar = tk.Frame(win, bg=BG)
+        top_bar.pack(fill="x", padx=16, pady=(12, 4))
+        tk.Label(top_bar, text="\U0001f4cb  Reporte de Fragmentación",
+                 font=FONT_STEP, bg=BG, fg=FG).pack(side="left")
+
+        def _save_report():
+            from tkinter import filedialog as _fd
+            path = _fd.asksaveasfilename(
+                title="Guardar reporte",
+                defaultextension=".txt",
+                filetypes=[("Texto", "*.txt"), ("Todos", "*.*")],
+                initialfile=f"reporte_fragmentacion_{_time.strftime('%Y%m%d_%H%M%S')}.txt",
+            )
+            if path:
+                try:
+                    with open(path, "w", encoding="utf-8") as f:
+                        f.write(report_text)
+                    messagebox.showinfo("Guardado", f"Reporte guardado en:\n{path}")
+                except Exception as exc:
+                    messagebox.showerror("Error", f"No se pudo guardar:\n{exc}")
+
+        btn_save = tk.Button(
+            top_bar, text="\U0001f4be  Guardar .txt", font=FONT_BOLD,
+            bg="#3a3a7a", fg=FG, activebackground="#5050aa", activeforeground=FG,
+            relief="flat", cursor="hand2", padx=12, pady=4,
+            command=_save_report,
+        )
+        btn_save.pack(side="right")
+
+        txt = tk.Text(
+            win, bg=BG_INPUT, fg=FG, font=FONT_LOG,
+            relief="flat", wrap="none", padx=12, pady=10,
+            insertbackground=FG,
+        )
+        sb_y = ttk.Scrollbar(win, orient="vertical",   command=txt.yview)
+        sb_x = ttk.Scrollbar(win, orient="horizontal", command=txt.xview)
+        txt.configure(yscrollcommand=sb_y.set, xscrollcommand=sb_x.set)
+
+        sb_y.pack(side="right",  fill="y")
+        sb_x.pack(side="bottom", fill="x")
+        txt.pack(fill="both", expand=True, padx=(16, 0), pady=(4, 0))
+
+        # Tags para resaltar
+        txt.tag_configure("header",   foreground=ACCENT_LIGHT, font=("Consolas", 9, "bold"))
+        txt.tag_configure("seg_flag", foreground="#ffd700")
+        txt.tag_configure("pag_flag", foreground=ERROR)
+        txt.tag_configure("fol_flag", foreground=WARNING)
+        txt.tag_configure("col_key",  foreground=FG_DIM)
+        txt.tag_configure("normal",   foreground=FG)
+
+        for line in lines:
+            if line.startswith("═") or line.startswith("─"):
+                txt.insert("end", line + "\n", "header")
+            elif line.strip().startswith("REPORTE") or line.strip().startswith("FIN DEL") \
+                    or line.strip().startswith("CONFIGURACIÓN") \
+                    or line.strip().startswith("COLUMNAS") \
+                    or line.strip().startswith("MAPEO"):
+                txt.insert("end", line + "\n", "header")
+            elif "[SALTO" in line or "[SALTO PDF]" in line:
+                txt.insert("end", line + "\n", "seg_flag")
+            elif "[PAG-IGN" in line:
+                txt.insert("end", line + "\n", "pag_flag")
+            elif "[FOL-IGN" in line:
+                txt.insert("end", line + "\n", "fol_flag")
+            elif " : " in line and "Folio" not in line and "PDF" not in line \
+                    and line.strip().startswith(tuple(c[0] for c in col_map)):
+                txt.insert("end", line + "\n", "col_key")
+            else:
+                txt.insert("end", line + "\n", "normal")
+
+        txt.config(state="disabled")
+
+    def _get_segments(self) -> list:
+        """
+        Devuelve la lista de segmentos como (page_abs_inicio, pdf_page_inicio),
+        ordenada de menor a mayor page_abs.
+        El primer segmento siempre proviene de los spinboxes principales.
+        """
+        # Primer segmento: folio_inicio_excel (siempre recto) -> pdf_page_inicio
+        first_page_abs = _folio_to_page_abs(self.folio_inicio_excel, 'r')
+        segs = [(first_page_abs, self.pdf_page_inicio)]
+        for item in self.tree_segs.get_children():
+            tags = self.tree_segs.item(item, "tags")
+            vals = self.tree_segs.item(item, "values")
+            try:
+                # El tag almacena el page_abs calculado al insertar
+                page_abs = int(tags[0]) if tags else folio_text_to_page_abs(str(vals[0]))
+                pdf_pag  = int(vals[1])
+                if page_abs and pdf_pag > 0:
+                    segs.append((page_abs, pdf_pag))
+            except (ValueError, IndexError, TypeError):
+                pass
+        return sorted(segs, key=lambda x: x[0])
+
+    # ─── Analizador de sucesión de folios ─────────────────────────────────
+    def _analyze_folios(self):
+        """Ejecuta el analisis de sucesion de folios y muestra el resultado con numeros de fila."""
+        if self.df is None:
+            messagebox.showwarning("Sin datos", "Primero carga un archivo Excel.")
+            return
+
+        folio_list = []
+        row_indices = []
+        for fila_excel, row in self.df.iterrows():
+            folio_list.append(str(row.get(config.COL_FOLIOS, "")).strip())
+            row_indices.append(fila_excel)
+
+        result = analyze_folio_sequence(folio_list, indices=row_indices)
+        self._show_analyzer_result("ANALISIS DE SUCESION DE FOLIOS", result["summary"], result["ok"])
+
+    # ─── Analizador de DATA TÓPICA ─────────────────────────────────────────
+    def _analyze_data_topica(self):
+        """Ejecuta el análisis de DATA TÓPICA y muestra el resultado."""
+        if self.df is None:
+            messagebox.showwarning("Sin datos", "Primero carga un archivo Excel.")
+            return
+
+        registros = [row.to_dict() for _, row in self.df.iterrows()]
+        result = analyze_data_topica(
+            registros,
+            col_topica=config.COL_LUGAR,
+            col_registro=config.COL_REGISTRO,
+        )
+        self._show_analyzer_result("ANALISIS DATA TOPICA", result["summary"], result["ok"])
+
+    def _analyze_data_cronica(self):
+        """Ejecuta el analisis de DATA CRONICA y muestra el resultado."""
+        if self.df is None:
+            messagebox.showwarning("Sin datos", "Primero carga un archivo Excel.")
+            return
+        registros = [row.to_dict() for _, row in self.df.iterrows()]
+        result = analyze_data_cronica(
+            registros,
+            col_fecha_ini=config.COL_FECHA_INI,
+            col_fecha_fin="FECHA FINAL",
+            col_registro=config.COL_REGISTRO,
+        )
+        self._show_analyzer_result("ANALISIS DATA CRONICA", result["summary"], result["ok"])
+
+    # ─── Verificador de cobertura PDF ──────────────────────────────────────
+    def _analyze_pdf_coverage(self):
+        """
+        Verifica si la ultima hoja del PDF coincide exactamente con el
+        final del rango configurado (filas manuales + segmentos adicionales).
+
+        Logica:
+          1. Requiere PDF cargado para conocer total_pdf_pages.
+          2. Toma el rango de filas (spin_start / spin_end).
+          3. Toma los segmentos (spinboxes principales + segmentos adicionales).
+          4. Para cada fila del Excel en el rango, convierte sus folios a paginas PDF.
+          5. La mayor pagina PDF usada = ultima pagina consumida.
+          6. Compara con total_pdf_pages del PDF.
+        """
+        lines = []
+
+        # ── Validaciones previas ──────────────────────────────────────────
+        if self.df is None:
+            lines.append("[ERR]  No hay Excel cargado. Carga primero un archivo Excel.")
+            self._show_analyzer_result("VERIFICACION DE COBERTURA PDF", "\n".join(lines), False)
+            return
+
+        if self.pdf_path is None:
+            lines.append("[ERR]  No hay PDF seleccionado. Selecciona primero el archivo PDF.")
+            self._show_analyzer_result("VERIFICACION DE COBERTURA PDF", "\n".join(lines), False)
+            return
+
+        # ── Leer total de paginas del PDF ─────────────────────────────────
+        try:
+            reader = open_pdf(self.pdf_path)
+            total_pdf_pages = len(reader.pages)
+        except Exception as exc:
+            lines.append(f"[ERR]  No se pudo abrir el PDF: {exc}")
+            self._show_analyzer_result("VERIFICACION DE COBERTURA PDF", "\n".join(lines), False)
+            return
+
+        # ── Obtener rango de filas ────────────────────────────────────────
+        try:
+            row_start = int(self.spin_start.get())
+            row_end   = int(self.spin_end.get())
+        except ValueError:
+            lines.append("[ERR]  Rango de filas no valido (revisa los spinboxes).")
+            self._show_analyzer_result("VERIFICACION DE COBERTURA PDF", "\n".join(lines), False)
+            return
+
+        # ── Filtrar el DataFrame al rango seleccionado ────────────────────
+        df_slice = self.df.copy()
+        if row_start > 0:
+            df_slice = df_slice[df_slice.index >= row_start]
+        if row_end > 0:
+            df_slice = df_slice[df_slice.index <= row_end]
+
+        if len(df_slice) == 0:
+            lines.append("[ERR]  El rango de filas seleccionado no contiene datos.")
+            self._show_analyzer_result("VERIFICACION DE COBERTURA PDF", "\n".join(lines), False)
+            return
+
+        # ── Obtener segmentos de offset ───────────────────────────────────
+        segments = self._get_segments()
+
+        # ── Calcular la mayor pagina PDF utilizada ────────────────────────
+        max_page_used = 0
+        last_valid_folio = ""
+        last_valid_fila  = None
+        invalid_count    = 0
+
+        for fila_excel, row in df_slice.iterrows():
+            folio_str = str(row.get(config.COL_FOLIOS, "")).strip()
+            if not folio_str or folio_str.lower() == "nan":
+                continue
+            pages, err = parse_folio_range(folio_str, segments=segments)
+            if err or not pages:
+                invalid_count += 1
+                continue
+            ultimo = pages[-1]
+            if ultimo > max_page_used:
+                max_page_used    = ultimo
+                last_valid_folio = folio_str
+                last_valid_fila  = fila_excel
+
+        # ── Calcular paginas del rango de segmentos adicionales ───────────
+        # Los segmentos adicionales redefinen offsets pero no por si solos
+        # consumen paginas; solo lo hacen si hay folios en ese tramo.
+        # max_page_used ya contempla todos los folios del rango.
+
+        # ── Construir informe ─────────────────────────────────────────────
+        rango_desc = (
+            f"Filas Excel {df_slice.index.min()} – {df_slice.index.max()}"
+            + (" (todas las filas)" if row_end == 0 else "")
+        )
+        seg_count = len(segments)
+
+        lines.append(f"  PDF seleccionado   : {self.pdf_path.name}")
+        lines.append(f"  Total paginas PDF  : {total_pdf_pages}")
+        lines.append(f"  Rango de filas     : {rango_desc}")
+        lines.append(f"  Segmentos offset   : {seg_count}  {segments}")
+        lines.append(f"  Registros en rango : {len(df_slice)}")
+        if invalid_count:
+            lines.append(f"  [!!]  Folios invalidos ignorados: {invalid_count}")
+        lines.append("")
+
+        if max_page_used == 0:
+            lines.append("[ERR]  No se encontro ningun folio valido en el rango. "
+                         "Verifica el Excel y los segmentos.")
+            self._show_analyzer_result("VERIFICACION DE COBERTURA PDF", "\n".join(lines), False)
+            return
+
+        lines.append(f"  Ultima pagina PDF usada por el rango: {max_page_used}")
+        lines.append(f"    (corresponde al folio '{last_valid_folio}', fila Excel {last_valid_fila})")
+        lines.append(f"  Ultima pagina real del PDF           : {total_pdf_pages}")
+        lines.append("")
+
+        diferencia = total_pdf_pages - max_page_used
+
+        if diferencia == 0:
+            lines.append("[OK]  PERFECTO: La ultima hoja del PDF coincide exactamente con el")
+            lines.append("      final del rango. El PDF se separara sin que sobre ninguna hoja.")
+            ok = True
+        elif diferencia > 0:
+            lines.append(f"[!!]  ADVERTENCIA: Sobrarian {diferencia} pagina(s) del PDF sin asignar.")
+            lines.append(f"      El rango solo cubre hasta la pagina {max_page_used},")
+            lines.append(f"      pero el PDF tiene {total_pdf_pages} paginas en total.")
+            lines.append("")
+            lines.append("      Posibles causas:")
+            lines.append("        - El rango de filas no llega hasta el ultimo registro del protocolo.")
+            lines.append("        - Faltan registros en el Excel para las ultimas hojas del PDF.")
+            lines.append("        - El offset (folio inicio / pagina PDF) no esta bien configurado.")
+            lines.append("        - Faltan segmentos adicionales para cubrir los folios restantes.")
+            ok = False
+        else:  # diferencia < 0
+            lines.append(f"[ERR]  ERROR: El rango requiere {-diferencia} pagina(s) MAS de las que")
+            lines.append(f"      tiene el PDF ({total_pdf_pages} paginas disponibles,")
+            lines.append(f"      pero el rango alcanza la pagina {max_page_used}).")
+            lines.append("")
+            lines.append("      Posibles causas:")
+            lines.append("        - El offset (folio inicio / pagina PDF) es incorrecto.")
+            lines.append("        - El rango de filas excede lo que este PDF contiene.")
+            lines.append("        - Algun segmento adicional apunta a una pagina inexistente.")
+            ok = False
+
+        self._show_analyzer_result("VERIFICACION DE COBERTURA PDF", "\n".join(lines), ok)
+
+    def _show_analyzer_result(self, titulo: str, summary: str, ok: bool):
+        """Escribe el resultado de un analisis en el panel de analizadores."""
+        self.txt_analyzer.config(state="normal")
+        self.txt_analyzer.delete("1.0", "end")
+        ts = time.strftime("%H:%M:%S")
+        sep = "-" * 60
+        header = f"[{ts}] {titulo}\n{sep}\n"
+        self.txt_analyzer.insert("end", header, "info")
+        # Colorear linea a linea segun prefijo ASCII
+        for line in summary.splitlines():
+            if line.startswith("[OK]"):
+                tag = "ok"
+            elif line.startswith("[ERR]"):
+                tag = "err"
+            elif line.startswith("[!!]"):
+                tag = "warn"
+            else:
+                tag = "info"
+            self.txt_analyzer.insert("end", line + "\n", tag)
+        self.txt_analyzer.see("end")
+        self.txt_analyzer.config(state="disabled")
+
+    def _run_process(self):
+        try:
+            row_start  = int(self.spin_start.get())
+            row_end    = int(self.spin_end.get())
             check_gaps = not self.var_no_gap.get()
             output_dir = self.output_dir
+            segments             = self._get_segments()        # lista de (folio_ini, pdf_pag_ini)
+            ignored_pages        = self._get_ignored_pages()   # set de pags PDF a omitir del output
+            ignored_folio_pages  = self._get_ignored_folio_pages()  # folios ausentes: solo ajustan conteo
+
+            if ignored_pages:
+                self._log_thread(
+                    f"Páginas PDF ignoradas ({len(ignored_pages)}): "
+                    + ", ".join(str(p) for p in sorted(ignored_pages))
+                )
+            if ignored_folio_pages:
+                self._log_thread(
+                    f"Folios ausentes excluidos del conteo ({len(ignored_folio_pages)} posiciones): "
+                    + ", ".join(str(p) for p in sorted(ignored_folio_pages))
+                )
 
             # Filtrar DataFrame usando filas reales del Excel
             df_slice = self.df
@@ -741,13 +1838,25 @@ class App(tk.Tk):
             self._log_thread("Abriendo archivo PDF…")
             reader = open_pdf(self.pdf_path)
             total_pdf_pages = len(reader.pages)
-            self._log_thread(f"PDF abierto: {total_pdf_pages} páginas.")
+            self._log_thread(f"PDF abierto: {total_pdf_pages} paginas.")
+            self._log_thread(
+                f"Segmentos de offset: {segments}"
+            )
 
-            processed = 0
-            skipped   = 0
-            errors    = []
+            # Leer metadatos del fondo (acervo y siglo) UNA SOLA VEZ antes del bucle
+            meta = load_excel_metadata(
+                self.excel_path,
+                meta_row_siglo=config.META_ROW_SIGLO,
+                meta_row_acervo=config.META_ROW_ACERVO,
+            )
+            self._log_thread(f"Fondo: ACERVO DOCUMENTAL NUMERO {meta['acervo_num']}  |  SIGLO {meta['siglo']}")
+
+            processed      = 0
+            skipped        = 0
+            errors         = []
             prev_last_page = None
-            start_time = time.time()
+            prev_seg_proc  = segments[0] if segments else None
+            start_time     = time.time()
 
             for i, (fila_excel, row) in enumerate(df_slice.iterrows()):
                 # Revisar cancelación
@@ -756,18 +1865,34 @@ class App(tk.Tk):
                     break
 
                 row_dict = row.to_dict()
-                reg_id = row_dict.get(config.COL_REGISTRO, f"fila_{fila_excel}")
+                reg_id   = row_dict.get(config.COL_REGISTRO, f"fila_{fila_excel}")
 
                 # Actualizar progreso
                 pct = int((i + 1) / total * 100)
                 msg = f"Fila {fila_excel}  ·  Reg. {reg_id}  ({i+1} de {total})"
                 self.after(0, lambda p=pct, m=msg: self._update_progress(p, m))
 
+                # Detectar cambio de segmento para omitir el gap-check en la transición
+                folio_str_raw = str(row_dict.get(config.COL_FOLIOS, "")).strip()
+                check_prev    = prev_last_page
+                curr_seg_proc = prev_seg_proc
+                if folio_str_raw and folio_str_raw.lower() != 'nan' and len(segments) > 1:
+                    _first_txt = folio_str_raw.split('-')[0].strip()
+                    _abs_pg    = folio_text_to_page_abs(_first_txt)
+                    if _abs_pg is not None:
+                        curr_seg_proc = _find_segment(_abs_pg, segments)
+                        if curr_seg_proc != prev_seg_proc:
+                            check_prev = None  # no aplicar gap-check al cruzar segmento
+                            self._log_thread(
+                                f"  [SALTO] Fila {fila_excel}: nuevo segmento → pág.PDF {curr_seg_proc[1]}"
+                            )
+
                 # Validar
                 is_valid, error_msg = validate_record(
                     row=row_dict, col_folios=config.COL_FOLIOS,
                     total_pdf_pages=total_pdf_pages,
-                    prev_last_page=prev_last_page, check_gaps=check_gaps,
+                    prev_last_page=check_prev, check_gaps=check_gaps,
+                    segments=segments,
                 )
 
                 if not is_valid:
@@ -776,27 +1901,43 @@ class App(tk.Tk):
                     self._log_thread(f"Fila {fila_excel} omitida: {error_msg}")
                     continue
 
-                folio_str = str(row_dict.get(config.COL_FOLIOS, "")).strip()
-                pages, _ = parse_folio_range(folio_str)
+                folio_str = folio_str_raw
+                pages, _ = parse_folio_range(folio_str, segments=segments)
+
+                # Ajustar páginas por folios físicamente ausentes del escaneo.
+                # El shift solo afecta al segmento activo (curr_seg_proc).
+                if ignored_folio_pages and pages:
+                    pages = adjust_pages_for_missing_folios(
+                        pages, ignored_folio_pages,
+                        active_seg=curr_seg_proc, segments=segments,
+                    )
 
                 dest_path = build_output_path(
                     output_dir=output_dir,
-                    escribano=str(row_dict.get(config.COL_ESCRIBANO, "")),
+                    acervo_num=meta["acervo_num"],
+                    siglo=meta["siglo"],
+                    escribano=str(row_dict.get(config.COL_ESCRIBANO, "")).replace("\n", " "),
                     protocolo=str(row_dict.get(config.COL_PROTOCOLO, "")),
                     registro=str(row_dict.get(config.COL_REGISTRO, "")),
-                    titulo=str(row_dict.get(config.COL_TITULO, "")),
+                    titulo_est=str(row_dict.get(config.COL_TITULO_EST, "")),
                     fecha_ini=str(row_dict.get(config.COL_FECHA_INI, "")),
                     interesado1=str(row_dict.get(config.COL_INT1, "")),
                     interesado2=str(row_dict.get(config.COL_INT2, "")),
                 )
 
-                success = extract_pages(reader=reader, page_numbers=pages,
-                                        dest_path=dest_path)
+                success = extract_pages(
+                    reader=reader,
+                    page_numbers=pages,
+                    dest_path=dest_path,
+                    ignored_pages=ignored_pages,
+                )
 
                 if success:
                     processed += 1
-                    prev_last_page = last_page_of_range(folio_str)
-                    self._log_thread(f"✓  Fila {fila_excel} → {dest_path.name}")
+                    # Usar la última página efectiva (después de folios ignorados)
+                    prev_last_page = pages[-1] if pages else last_page_of_range(folio_str, segments=segments)
+                    prev_seg_proc  = curr_seg_proc
+                    self._log_thread(f"OK Fila {fila_excel} -> {dest_path.name}")
                 else:
                     skipped += 1
                     errors.append(f"Fila {fila_excel}: Error al extraer páginas")

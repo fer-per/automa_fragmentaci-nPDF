@@ -35,7 +35,7 @@ from pathlib import Path
 from tqdm import tqdm
 
 import config
-from modules.excel_reader import load_excel
+from modules.excel_reader import load_excel, load_excel_metadata
 from modules.folio_parser import parse_folio_range, last_page_of_range
 from modules.pdf_extractor import open_pdf, extract_pages
 from modules.folder_builder import build_output_path
@@ -103,28 +103,34 @@ def run_preview(excel_path: Path, skip_rows: int) -> None:
     La columna FILA muestra el número de fila real del Excel (1-indexed).
     Útil para decidir el rango --row-start / --row-end antes de procesar.
     """
+    meta = load_excel_metadata(
+        excel_path,
+        meta_row_siglo=config.META_ROW_SIGLO,
+        meta_row_acervo=config.META_ROW_ACERVO,
+    )
     df = load_excel(excel_path, skip_rows=skip_rows)
     total = len(df)
 
     print(f"\nExcel: {excel_path}  |  Total filas de datos: {total}")
+    print(f"Fondo: ACERVO DOCUMENTAL NUMERO {meta['acervo_num']}  |  SIGLO {meta['siglo']}")
     print(f"Filas del Excel: {df.index.min()} a {df.index.max()}")
-    print("-" * 110)
-    print(f"{'FILA':>5}  {'REG':>5}  {'ESCRIBANO':<20}  {'PROT':>5}  {'FOLIOS':<10}  {'TITULO':<20}  {'INTERESADO 1'}")
-    print("-" * 110)
+    print("-" * 120)
+    print(f"{'FILA':>5}  {'REG':>5}  {'ESCRIBANO':<20}  {'PROT':>5}  {'FOLIOS':<10}  {'TITULO EST.':<20}  {'INTERESADO 1'}")
+    print("-" * 120)
 
     for fila_excel, row in df.iterrows():
-        reg        = str(row.get(config.COL_REGISTRO,  "")).strip()
-        escribano  = str(row.get(config.COL_ESCRIBANO, "")).strip()[:20]
-        protocolo  = str(row.get(config.COL_PROTOCOLO, "")).strip()
-        folios     = str(row.get(config.COL_FOLIOS,    "")).strip()
-        titulo     = str(row.get(config.COL_TITULO,    "")).strip()[:20]
-        int1       = str(row.get(config.COL_INT1,      "")).strip()
+        reg        = str(row.get(config.COL_REGISTRO,   "")).strip()
+        escribano  = str(row.get(config.COL_ESCRIBANO,  "")).replace("\n", " ").strip()[:20]
+        protocolo  = str(row.get(config.COL_PROTOCOLO,  "")).strip()
+        folios     = str(row.get(config.COL_FOLIOS,     "")).strip()
+        titulo_est = str(row.get(config.COL_TITULO_EST, "")).strip()[:20]
+        int1       = str(row.get(config.COL_INT1,       "")).strip()
 
         # Marcar filas sin folio
         marker = "  " if folios else " *"
-        print(f"{fila_excel:>5}{marker} {reg:>5}  {escribano:<20}  {protocolo:>5}  {folios:<10}  {titulo:<20}  {int1}")
+        print(f"{fila_excel:>5}{marker} {reg:>5}  {escribano:<20}  {protocolo:>5}  {folios:<10}  {titulo_est:<20}  {int1}")
 
-    print("-" * 110)
+    print("-" * 120)
     print(f"  Total: {total} filas  |  (*) = sin folios")
     print(f"\nEjemplo de uso:")
     print(f"  python main.py --excel \"{excel_path}\" --pdf mi_doc.pdf --row-start {df.index.min()} --row-end {df.index.max()}\n")
@@ -139,17 +145,22 @@ def run(
     row_end: int,
     dry_run: bool,
     check_gaps: bool,
+    folio_inicio_excel: int = 1,
+    pdf_page_inicio: int = 1,
 ) -> None:
     """
     Procesa las filas del Excel usando las filas reales del archivo.
+    Los metadatos del fondo (acervo_num, siglo) se leen al inicio desde las filas de cabecera.
 
     Args:
-        excel_path: Ruta al archivo Excel .xlsx
-        pdf_path:   Ruta al PDF fuente de este protocolo
-        row_start:  Fila real del Excel donde iniciar (0 = desde la primera fila de datos)
-        row_end:    Fila real del Excel donde terminar (inclusive). 0 = hasta el final.
-        dry_run:    Si True, no escribe archivos en disco
-        check_gaps: Si True, detecta saltos de secuencia entre folios
+        excel_path:         Ruta al archivo Excel .xlsx
+        pdf_path:           Ruta al PDF fuente de este protocolo
+        row_start:          Fila real del Excel donde iniciar (0 = desde la primera fila de datos)
+        row_end:            Fila real del Excel donde terminar (inclusive). 0 = hasta el final.
+        dry_run:            Si True, no escribe archivos en disco
+        check_gaps:         Si True, detecta saltos de secuencia entre folios
+        folio_inicio_excel: Numero de folio con que comienza el protocolo en el Excel (ej. 30).
+        pdf_page_inicio:    Pagina real del PDF donde empieza la primera imagen del protocolo.
     """
     logger = logging.getLogger(__name__)
     start_time = time.time()
@@ -158,13 +169,25 @@ def run(
     logger.info("INICIO DEL PROCESO ARCHIVISTICO")
     logger.info(f"  Excel:     {excel_path}")
     logger.info(f"  PDF:       {pdf_path}")
-    logger.info(f"  Filas:     {row_start} → {'fin' if row_end == 0 else row_end}")
+    logger.info(f"  Filas:     {row_start} -> {'fin' if row_end == 0 else row_end}")
     logger.info(f"  Salida:    {config.OUTPUT_DIR}")
     logger.info(f"  DRY RUN:   {dry_run}")
     logger.info(f"  Saltos:    {'ON' if check_gaps else 'OFF'}")
+    logger.info(f"  Folio ini Excel: {folio_inicio_excel}")
+    logger.info(f"  Pag ini PDF:     {pdf_page_inicio}")
     logger.info("=" * 60)
 
-    # 1. Cargar Excel completo (el índice del DataFrame = fila real del Excel)
+    # 1a. Leer metadatos del fondo (siglo y número de acervo) desde las filas de cabecera
+    meta = load_excel_metadata(
+        excel_path,
+        meta_row_siglo=config.META_ROW_SIGLO,
+        meta_row_acervo=config.META_ROW_ACERVO,
+    )
+    acervo_num = meta["acervo_num"]
+    siglo      = meta["siglo"]
+    logger.info(f"  Fondo:     ACERVO DOCUMENTAL NUMERO {acervo_num}  |  SIGLO {siglo}")
+
+    # 1b. Cargar Excel completo (el índice del DataFrame = fila real del Excel)
     df = load_excel(excel_path, skip_rows=config.SKIP_ROWS)
 
     # 2. Aplicar filtro de rango usando filas reales del Excel
@@ -201,6 +224,8 @@ def run(
             total_pdf_pages=total_pdf_pages,
             prev_last_page=prev_last_page,
             check_gaps=check_gaps,
+            folio_inicio_excel=folio_inicio_excel,
+            pdf_page_inicio=pdf_page_inicio,
         )
 
         reg_id = row_dict.get(config.COL_REGISTRO, f"fila_{fila_excel}")
@@ -214,15 +239,21 @@ def run(
 
         # Parsear folios
         folio_str = str(row_dict.get(config.COL_FOLIOS, "")).strip()
-        pages, _ = parse_folio_range(folio_str)
+        pages, _ = parse_folio_range(
+            folio_str,
+            folio_inicio_excel=folio_inicio_excel,
+            pdf_page_inicio=pdf_page_inicio,
+        )
 
-        # Construir ruta de destino
+        # Construir ruta de destino (jerarquía de 11 niveles)
         dest_path = build_output_path(
             output_dir=config.OUTPUT_DIR,
-            escribano=str(row_dict.get(config.COL_ESCRIBANO, "")),
+            acervo_num=acervo_num,
+            siglo=siglo,
+            escribano=str(row_dict.get(config.COL_ESCRIBANO, "")).replace("\n", " "),
             protocolo=str(row_dict.get(config.COL_PROTOCOLO, "")),
             registro=str(row_dict.get(config.COL_REGISTRO, "")),
-            titulo=str(row_dict.get(config.COL_TITULO, "")),
+            titulo_est=str(row_dict.get(config.COL_TITULO_EST, "")),
             fecha_ini=str(row_dict.get(config.COL_FECHA_INI, "")),
             interesado1=str(row_dict.get(config.COL_INT1, "")),
             interesado2=str(row_dict.get(config.COL_INT2, "")),
@@ -243,7 +274,11 @@ def run(
                 f"({len(pages)} pag.: {pages})"
             )
             processed += 1
-            prev_last_page = last_page_of_range(folio_str)
+            prev_last_page = last_page_of_range(
+                folio_str,
+                folio_inicio_excel=folio_inicio_excel,
+                pdf_page_inicio=pdf_page_inicio,
+            )
         else:
             logger.error(f"Fila {fila_excel} / Reg {reg_id}: ERROR al extraer paginas - {folio_str}")
             pendientes.write(row_dict, motivo="Error al extraer paginas del PDF")
@@ -320,6 +355,22 @@ if __name__ == "__main__":
         "--no-gap-check", action="store_true", default=False,
         help="Desactiva la deteccion de saltos de secuencia entre folios.",
     )
+    parser.add_argument(
+        "--folio-inicio", type=int, default=1,
+        metavar="N",
+        help=(
+            "Numero de folio con el que COMIENZA el protocolo en el Excel "
+            "(default: 1). Ej.: si el Excel inicia en 30r, usa --folio-inicio 30"
+        ),
+    )
+    parser.add_argument(
+        "--pdf-page-inicio", type=int, default=1,
+        metavar="N",
+        help=(
+            "Pagina real del PDF donde empieza la primera imagen del protocolo "
+            "(default: 1). Ej.: si hay 2 portadas antes, usa --pdf-page-inicio 3"
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -347,6 +398,8 @@ if __name__ == "__main__":
             row_end=args.row_end,
             dry_run=args.dry_run,
             check_gaps=not args.no_gap_check,
+            folio_inicio_excel=args.folio_inicio,
+            pdf_page_inicio=args.pdf_page_inicio,
         )
     except FileNotFoundError as e:
         logging.critical(f"Archivo no encontrado: {e}")

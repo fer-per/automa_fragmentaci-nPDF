@@ -36,23 +36,33 @@ def extract_pages(
     page_numbers: list[int],
     dest_path: Path,
     dry_run: bool = False,
+    ignored_pages: set = None,
 ) -> bool:
     """
     Extrae las páginas indicadas del PdfReader y escribe un nuevo PDF en dest_path.
 
     Args:
-        reader:       PdfReader ya abierto del PDF fuente.
-        page_numbers: Lista de números de página (1-indexed) a extraer.
-        dest_path:    Ruta completa donde se escribirá el nuevo PDF.
-        dry_run:      Si True, no escribe nada en disco.
+        reader:        PdfReader ya abierto del PDF fuente.
+        page_numbers:  Lista de números de página (1-indexed) a extraer.
+        dest_path:     Ruta completa donde se escribirá el nuevo PDF.
+        dry_run:       Si True, no escribe nada en disco.
+        ignored_pages: Conjunto de números de página (1-indexed) a ignorar/omitir.
+                       Las páginas en este set se saltan silenciosamente.
 
     Returns:
         True si la extracción fue exitosa, False en caso de error.
     """
     total_pages = len(reader.pages)
+    ignored_pages = ignored_pages or set()
     writer = PdfWriter()
+    skipped_ignored = []
 
     for page_num in page_numbers:
+        # Saltar páginas explícitamente ignoradas
+        if page_num in ignored_pages:
+            skipped_ignored.append(page_num)
+            continue
+
         idx = page_num - 1  # pypdf usa índice 0-based
         if idx < 0 or idx >= total_pages:
             logger.error(
@@ -62,13 +72,32 @@ def extract_pages(
             return False
         writer.add_page(reader.pages[idx])
 
+    if skipped_ignored:
+        logger.info(
+            f"Páginas ignoradas (excluidas de la extracción): {skipped_ignored}"
+        )
+
+    # Si todas las páginas fueron ignoradas, no escribir un PDF vacío
+    if len(writer.pages) == 0:
+        logger.warning(
+            f"Todas las páginas de '{dest_path.name}' fueron ignoradas. "
+            "No se generó archivo de salida."
+        )
+        return True  # No es un error: fue intencional
+
     if dry_run:
-        logger.info(f"[DRY RUN] Se escribiría: {dest_path} ({len(page_numbers)} páginas)")
+        logger.info(
+            f"[DRY RUN] Se escribiría: {dest_path} "
+            f"({len(writer.pages)} páginas, {len(skipped_ignored)} ignoradas)"
+        )
         return True
 
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     with open(dest_path, "wb") as f:
         writer.write(f)
 
-    logger.debug(f"PDF escrito: {dest_path} ({len(page_numbers)} páginas)")
+    logger.debug(
+        f"PDF escrito: {dest_path} "
+        f"({len(writer.pages)} páginas, {len(skipped_ignored)} ignoradas)"
+    )
     return True
